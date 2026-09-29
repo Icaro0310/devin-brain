@@ -1,0 +1,12 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    uses: Icaro0310/devin-powerups/.github/workflows/python-test.yml@main
+  secrets-scan:
+    uses: Icaro0310/devin-powerups/.github/workflows/redact-check.yml@main
