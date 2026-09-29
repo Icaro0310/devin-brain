@@ -46,7 +46,8 @@ FAKE_ENV_ASSIGNMENT = "AWS_SECRET" + "_ACCESS_KEY" + "=" + "F" * 32
 SECRET_FACT = f"deploy note: use {FAKE_AWS_KEY} for the demo tenant"
 JWT_FACT = f"observed header Authorization: Bearer {FAKE_JWT}"
 PEM_FACT = f"the cert bundle looked like:\n{FAKE_PEM}"
-ENV_FACT = f"found in the fixture .env: {FAKE_ENV_ASSIGNMENT}"
+# env assignments are only flagged at line start (same rule as devin-redact)
+ENV_FACT = f"found in the fixture .env:\n{FAKE_ENV_ASSIGNMENT}"
 
 LONG_BASE64_FACT = "payload: " + "QUJD" * 200  # 800-char base64-ish run
 

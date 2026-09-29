@@ -70,7 +70,7 @@ def test_insert_returns_typed_entry(tmp_path):
 
 def test_get_and_status_transitions(tmp_path):
     with MemoryStore(tmp_path / "m.db") as store:
-        e = store.insert(CLEAN_FACT, [], status="active")
+        e = store.insert(CLEAN_FACT, status="active")
         assert store.get(e.id).status == "active"
         store.set_status(e.id, "quarantined")
         assert store.get(e.id).status == "quarantined"
@@ -79,7 +79,7 @@ def test_get_and_status_transitions(tmp_path):
 
 def test_set_status_rejects_bad_value(tmp_path):
     with MemoryStore(tmp_path / "m.db") as store:
-        e = store.insert(CLEAN_FACT, [])
+        e = store.insert(CLEAN_FACT)
         with pytest.raises(ValueError):
             store.set_status(e.id, "bogus")
 
