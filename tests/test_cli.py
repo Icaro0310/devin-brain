@@ -37,7 +37,7 @@ def test_retain_secret_reports_quarantine(db, capsys):
 def test_recall_text_output(db, capsys):
     main(["--db", db, "retain", CLEAN_FACT])
     capsys.readouterr()
-    assert main(["--db", db, "recall", "sqlite"]) == 0
+    assert main(["--db", db, "recall", "sessions"]) == 0
     out = capsys.readouterr().out
     assert "ID" in out
     assert CLEAN_FACT[:10] in out
@@ -93,6 +93,7 @@ def test_verify_cli(db, tmp_path, capsys):
             "--source-rowid", str(rowid),
         ]
     )
+    capsys.readouterr()
     main(["--db", db, "list", "--json"])
     entry = json.loads(capsys.readouterr().out)[0]
 
@@ -114,6 +115,7 @@ def test_verify_cli_fails_on_bad_session(db, tmp_path, capsys):
         ["--db", db, "retain", CLEAN_FACT,
          "--source-session", "no-such-session"]
     )
+    capsys.readouterr()
     main(["--db", db, "list", "--json"])
     entry = json.loads(capsys.readouterr().out)[0]
     rc = main(
