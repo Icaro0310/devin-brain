@@ -41,8 +41,10 @@ don't have: a quarantine gate and provenance back to real session rows.
 
 ## Install
 
+Python ≥ 3.10 and `pipx` are required. **Windows (PowerShell):** install `pipx` with `py -m pip install --user pipx`, run `py -m pipx ensurepath`, then reopen the terminal. **Linux (Debian/Ubuntu):** run `sudo apt install pipx python3-venv` and `pipx ensurepath`; reopen the terminal. Other Linux distributions should install `pipx` using their package manager.
+
 ```bash
-pipx install devin-memory
+pipx install "devin-memory @ git+https://github.com/Icaro0310/devin-memory.git"
 ```
 
 For development:
@@ -78,9 +80,41 @@ devin-memory verify <id> --sessions-db path/to/sessions.db
 devin-memory export --out memories.jsonl
 ```
 
+## Learn from sessions with `devin-learning`
+
+This companion CLI extracts candidate lessons from a `sessions.db` and writes
+reviewable skill drafts. It does not install drafts into a workspace by default.
+
+```bash
+devin-learning extract --sessions-db path/to/sessions.db --out ./learning-drafts
+devin-learning review --out ./learning-drafts
+
+# After reviewing drafts, explicitly allow output to a live skill directory:
+devin-learning extract --sessions-db path/to/sessions.db --out .devin/skills --apply
+```
+
+`review` is a dry-run unless `--apply` is given; `review --apply` moves rejected
+drafts under `_rejected/`. The extractor reads session contents, so keep its
+output private until reviewed.
+
 The store is `./memory.db` by default — override with `--db` or
 `DEVIN_MEMORY_DB`. It is the only store this tool writes to; Devin's
 `sessions.db`, `acp-messages/*.db` and `state.vscdb` are only ever read.
+
+## Works with Devin alone (Devin-only mode)
+
+devin-memory keeps a local memory store (JSONL) with provenance tracking and
+a quarantine lane — no external memory service, no network calls. Both console
+scripts (`devin-memory` and `devin-learning`) run on your machine only.
+
+Honest caveat: write-time screening is a heuristic, not a guarantee — suspect
+entries land in quarantine for **human review**, so keep that habit.
+
+## Platform support
+
+The memory store uses an explicit local SQLite path and the session database is
+provided with `--sessions-db`; no platform-specific path is assumed. Windows
+and Linux are supported and covered by CI.
 
 ## Limitations
 

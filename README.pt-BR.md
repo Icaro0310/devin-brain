@@ -45,8 +45,10 @@ linhas reais da sessão.
 
 ## Instalação
 
+Requer Python ≥ 3.10 e `pipx`. **Windows (PowerShell):** instale `pipx` com `py -m pip install --user pipx`, execute `py -m pipx ensurepath` e reabra o terminal. **Linux (Debian/Ubuntu):** execute `sudo apt install pipx python3-venv` e `pipx ensurepath`; reabra o terminal. Noutras distribuições Linux, instale `pipx` pelo gestor de pacotes.
+
 ```bash
-pipx install devin-memory
+pipx install "devin-memory @ git+https://github.com/Icaro0310/devin-memory.git"
 ```
 
 Para desenvolvimento:
@@ -82,10 +84,44 @@ devin-memory verify <id> --sessions-db caminho/para/sessions.db
 devin-memory export --out memories.jsonl
 ```
 
+## Aprender com sessões: `devin-learning`
+
+Este CLI auxiliar extrai lições candidatas de um `sessions.db` e grava drafts
+revisáveis de skills. Por defeito, não os instala no workspace.
+
+```bash
+devin-learning extract --sessions-db caminho/sessions.db --out ./learning-drafts
+devin-learning review --out ./learning-drafts
+
+# Depois de rever os drafts, permite explicitamente escrever na pasta ativa:
+devin-learning extract --sessions-db caminho/sessions.db --out .devin/skills --apply
+```
+
+`review` é dry-run por omissão; `review --apply` move drafts rejeitados para
+`_rejected/`. O extractor lê conteúdo das sessões: mantém os resultados
+privados até os reveres.
+
 A base de dados é `./memory.db` por defeito — muda com `--db` ou
 `DEVIN_MEMORY_DB`. É o único store em que esta ferramenta escreve; o
 `sessions.db`, `acp-messages/*.db` e `state.vscdb` do Devin são apenas
 lidos, nunca modificados.
+
+## Funciona só com o Devin (modo Devin-only)
+
+O devin-memory mantém uma store de memória local (JSONL) com proveniência e
+uma faixa de quarentena — sem serviço externo de memória, sem chamadas de
+rede. Ambos os executáveis (`devin-memory` e `devin-learning`) correm apenas
+na tua máquina.
+
+Ressalva honesta: a filtragem na escrita é uma heurística, não uma garantia —
+entradas suspeitas vão para quarentena para **revisão humana**, mantém esse
+hábito.
+
+## Suporte de plataformas
+
+A memória usa um caminho SQLite local explícito e o banco de sessões é passado
+por `--sessions-db`; não assume um path específico do SO. Windows e Linux são
+suportados e testados no CI.
 
 ## Limitações
 
