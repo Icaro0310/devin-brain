@@ -140,6 +140,27 @@ and Linux are supported and covered by CI.
   replacement quarantines, review the queue (`quarantine --release`).
 - **Not on PyPI yet** — install from the repo for now.
 
+## When to use this
+
+- You persist agent memory between sessions and want it distrust-by-default: every write screened, suspect entries quarantined for human release.
+- You need to answer "where did this memory come from?" — entries carry `source_session_id`/`source_rowid`, auditable via `verify`.
+- You want memory versioning — `supersede`/`retract` keep a history instead of silent edits.
+- You want to stay compatible: `export` writes the Devin memory MCP's `memories.jsonl` line shape.
+
+## When NOT to use this
+
+- You need semantic recall — ranking is keyword-based, no embeddings in M1.
+- You expect the screen to catch everything — it is a heuristic filter; run dedicated scanners (gitleaks, devin-redact) alongside.
+- You want automatic memory extraction from sessions — `retain` stores what it is told; extraction is the `devin-learning` draft pipeline.
+
+## FAQ
+
+**How do I stop agent memory from being poisoned by a bad session?** Use `devin-memory retain` instead of appending to a raw store. Every write is screened for secret and injection shapes — suspect entries land in quarantine and only become active after a human runs `quarantine --release <id>`.
+
+**Can devin-memory prove a memory came from a real session?** Yes, via recorded provenance. `retain --source-session <id> --source-rowid <n>` stores the claimed origin, and `devin-memory verify <id> --sessions-db <path>` audits it read-only against Devin's actual `sessions.db` — a fabricated source is checkable, not silently trusted.
+
+**Does devin-memory replace the Devin memory MCP?** It complements it. The MCP is append-only with no screening; devin-memory adds quarantine, provenance and versioning, and `devin-memory export --out memories.jsonl` produces the exact line shape the MCP reads.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

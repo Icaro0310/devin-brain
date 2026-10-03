@@ -1,0 +1,26 @@
+# devin-memory
+
+> Anti-poisoning memory store for Devin agent sessions: durable facts with provenance, versioning, and a quarantine gate — so memory can't be silently corrupted by a bad session or injected content.
+
+Agent memory is a poisoning vector: any tool persisting "facts" between sessions can be corrupted by one bad session, with no review step and no answer to "where did this come from?". devin-memory keeps a local SQLite store where every entry can carry `source_session_id`/`source_rowid` auditable against Devin's `sessions.db`, every write is screened for secret and injection shapes (suspect entries land in quarantine for human release), and entries can be superseded/retracted. It exports to the Devin memory MCP's `memories.jsonl` line shape. A companion CLI, `devin-learning`, extracts candidate lessons from sessions.db into reviewable skill drafts.
+
+## Docs
+- [README](https://github.com/Icaro0310/devin-memory/blob/main/README.md): full documentation
+- [devin-internals-spec](https://github.com/Icaro0310/devin-internals-spec): store schema used for provenance audit
+
+## Key commands
+- `devin-memory retain "fact" --tags a,b [--source-session <id> --source-rowid <n>]`: store a screened fact
+- `devin-memory recall "query" [--json] [--limit 5]`: keyword-ranked recall of active entries
+- `devin-memory quarantine` / `--release <id>`: list and release quarantined entries
+- `devin-memory supersede <id> "corrected fact"` / `retract <id>`: versioning and housekeeping
+- `devin-memory verify <id> --sessions-db <path>`: audit an entry's claimed provenance (read-only)
+- `devin-memory export --out memories.jsonl`: export active memories in memory-MCP-compatible JSONL
+- `devin-learning extract --sessions-db <path> --out ./learning-drafts`: draft lessons from sessions
+- `devin-learning review --out ./learning-drafts`: review drafts (dry-run unless `--apply`)
+
+## When to use / when not
+- Use when: persisting agent memory that must be auditable and distrust-by-default; you want every memory to answer "which session produced this?"; you need a human review gate before suspect content becomes trusted.
+- Not when: you need semantic/embedding search (recall is keyword-based in M1); you expect the screen to be a guarantee (heuristics have false positives and negatives — run dedicated scanners like gitleaks/devin-redact too); you want auto-extraction as a primitive (`retain` stores what it is told; extraction is the devin-learning pipeline).
+
+## Related
+- [devin-ecosystem](https://icaro0310.github.io/): the 20+ tool ecosystem this belongs to

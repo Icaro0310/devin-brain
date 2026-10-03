@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: devin-memory
+authors:
+  - family-names: Galvao
+    given-names: Icaro
+url: "https://github.com/Icaro0310/devin-memory"
+repository-code: "https://github.com/Icaro0310/devin-memory"
+license: MIT
+abstract: "Anti-poisoning memory layer for Devin: reviewed, versioned, provenance-tracked durable memory with a quarantine gate."
+keywords:
+  - ai-agents
+  - devin
+  - agent-memory
+  - provenance
+  - memory-poisoning
+  - security
