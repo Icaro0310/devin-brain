@@ -148,6 +148,27 @@ suportados e testados no CI.
   substituição ficar em quarentena, revê a fila (`quarantine --release`).
 - **Ainda não está no PyPI** — instala a partir do repositório por agora.
 
+## Quando usar
+
+- Você persiste memória de agente entre sessões e quer desconfiança por defeito: cada escrita é rastreada, entradas suspeitas vão para quarentena até libertação humana.
+- Você precisa de responder "de onde veio esta memória?" — as entradas carregam `source_session_id`/`source_rowid`, auditáveis via `verify`.
+- Você quer versionamento de memória — `supersede`/`retract` mantêm histórico em vez de edições silenciosas.
+- Você quer manter compatibilidade: `export` escreve o formato de linha `memories.jsonl` do memory MCP do Devin.
+
+## Quando NÃO usar
+
+- Você precisa de recall semântico — o ranking é por keywords, sem embeddings no M1.
+- Você espera que o screening apanhe tudo — é um filtro heurístico; corra scanners dedicados (gitleaks, devin-redact) em paralelo.
+- Você quer extração automática de memória das sessões — `retain` guarda o que lhe é dito; a extração é o pipeline draft `devin-learning`.
+
+## FAQ
+
+**Como evito que a memória do agente seja envenenada por uma sessão má?** Use `devin-memory retain` em vez de acrescentar a um store cru. Cada escrita é rastreada quanto a formas de segredos e injeção — entradas suspeitas caem em quarentena e só ficam ativas depois de um humano correr `quarantine --release <id>`.
+
+**O devin-memory consegue provar que uma memória veio de uma sessão real?** Sim, via proveniência registada. `retain --source-session <id> --source-rowid <n>` guarda a origem declarada, e `devin-memory verify <id> --sessions-db <path>` audita-a em read-only contra o `sessions.db` real do Devin — uma origem fabricada é verificável, não aceite cegamente.
+
+**O devin-memory substitui o memory MCP do Devin?** Complementa-o. O MCP é append-only e sem screening; o devin-memory adiciona quarentena, proveniência e versionamento, e `devin-memory export --out memories.jsonl` produz exatamente o formato de linha que o MCP lê.
+
 ## Licença
 
 MIT — vê [LICENSE](LICENSE).
