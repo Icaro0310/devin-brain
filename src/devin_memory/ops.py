@@ -52,8 +52,14 @@ def retain(
     tags: Iterable[str] = (),
     source_session_id: str | None = None,
     source_rowid: int | None = None,
+    machine_id: str | None = None,
+    profile: str | None = None,
 ) -> Entry:
-    """Screen ``content`` and store it with the resulting status."""
+    """Screen ``content`` and store it with the resulting status.
+
+    ``machine_id``/``profile`` default to this machine's opaque provenance
+    (:mod:`devin_memory.identity`) — pass them only to reattribute an entry.
+    """
     if not isinstance(content, str) or not content.strip():
         raise ValueError("content must be a non-empty string")
     tag_list = _norm_tags(tags)
@@ -65,6 +71,8 @@ def retain(
         quarantine_reasons=result.reasons,
         source_session_id=source_session_id,
         source_rowid=source_rowid,
+        machine_id=machine_id,
+        profile=profile,
     )
 
 
