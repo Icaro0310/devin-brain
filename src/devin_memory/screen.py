@@ -50,6 +50,10 @@ SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
         r"(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL)[A-Za-z0-9_]*"
         r"\s*=\s*\S[^\n]*"
     ),
+    "devin_pairing_code": re.compile(
+        r"(?i)(?:pairing|pair)[ -]?code\s*[:=]?\s*"
+        r"[A-Z0-9]{4}(?:-[A-Z0-9]{4}){1,3}"
+    ),
 }
 
 # --- injection heuristics ---------------------------------------------------

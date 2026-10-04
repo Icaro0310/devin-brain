@@ -66,18 +66,35 @@ pytest
 # Store a fact (screened on write; suspect content lands in quarantine)
 devin-memory retain "CI is green on Windows + Linux" --tags ci,status
 devin-memory retain "..." --source-session <session-id> --source-rowid <n>
+devin-memory retain "..." --workspace /path/to/project   # scope to a workspace
 
 # Keyword-ranked recall — returns active entries only
 devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
 
-# Review and release quarantined entries
-devin-memory quarantine                 # list with reasons
-devin-memory quarantine --release <id>  # human override -> active
+# Quarantine lane: list, mark an existing entry, or release one
+devin-memory quarantine                          # list with reasons
+devin-memory quarantine <id> [--reason manual:x] # mark entry as quarantined
+devin-memory quarantine --release <id>           # human override -> active
+
+# Contradictions: a conflicting retain is linked, not overwritten
+devin-memory conflicts [--json]     # (newer, older) pairs; resolve with
+                                    # supersede / retract / quarantine <id>
+
+# Mine a session for durable knowledge -> proposed entries (inactive
+# until reviewed); extraction is heuristic — see "Limitations"
+devin-memory extract <session-id> --sessions-db path/to/sessions.db
+devin-memory extract --latest --sessions-db path/to/sessions.db [--auto-approve]
+devin-memory list --status proposed   # review queue
+devin-memory approve <id>             # proposed -> active
+
+# Context block for a UserPromptSubmit hook — active entries only,
+# filtered by workspace + machine profile, bounded by ~4 chars/token
+devin-memory prime [--workspace PATH] [--max-tokens N]
 
 # Versioning and housekeeping
 devin-memory supersede <id> "corrected fact"
 devin-memory retract <id>
-devin-memory list [--status active|quarantined|retracted] [--json]
+devin-memory list [--status active|proposed|quarantined|retracted] [--json]
 
 # Audit an entry's provenance against a real sessions.db (read-only)
 devin-memory verify <id> --sessions-db path/to/sessions.db
@@ -103,6 +120,32 @@ devin-learning extract --sessions-db path/to/sessions.db --out .devin/skills --a
 drafts under `_rejected/`. The extractor reads session contents, so keep its
 output private until reviewed.
 
+## Memory states
+
+`active` · `proposed` (extracted, awaiting `approve`) · `quarantined`
+(screened or manually flagged, awaiting `release`) · `retracted` (withdrawn or
+superseded). Only `active` entries surface in `recall`/`prime`/`export` —
+quarantined content is never printed and never recalled.
+
+## Conflicts, extraction and prime (heuristics)
+
+- **Conflicts** — a `retain` that gives the opposite directive about the same
+  normalized subject as an existing active entry is stored alongside it with a
+  `conflicts_with` link (`devin-memory conflicts`). The heuristic compares a
+  stop-word-stripped "subject key" plus affirmative/prohibitive polarity — it
+  deliberately misses reworded contradictions rather than mislinking facts.
+- **`extract`** scans one session's `message_nodes` (read-only via
+  devin-internals) for durable-knowledge signals — user corrections
+  ("na verdade", "actually", "the right way"), preferences ("always", "never",
+  "sempre", "nunca"), discovered commands (backticked known tools) and paths.
+  Candidates are screened like any write: clean ones land `proposed`,
+  suspect ones `quarantined`. `--auto-approve` skips the review step.
+- **`prime`** emits a compact `# devin-memory: recalled context (heuristic)`
+  block sized for a prompt hook. Entries scoped with `retain --workspace`
+  only prime inside that workspace; entries written under a different
+  machine profile never prime (the profile defaults to `corporate` —
+  fail-closed).
+
 The store is `./memory.db` by default — override with `--db` or
 `DEVIN_MEMORY_DB`. It is the only store this tool writes to; Devin's
 `sessions.db`, `acp-messages/*.db` and `state.vscdb` are only ever read.
@@ -124,8 +167,10 @@ and Linux are supported and covered by CI.
 
 ## Limitations
 
-- **M1 is a primitive — no auto-extraction yet.** `retain` stores what it is
-  told; turning sessions into memories is M2 (`devin-learning` pipeline).
+- **Extraction is heuristic, and proposed by default.** `extract` lifts
+  keyword-shaped sentences from one session into a `proposed` review queue —
+  nothing becomes active without `approve` (or `--auto-approve`). For a
+  richer lesson pipeline see `devin-learning`.
 - **The screen is a filter, not a guarantee.** Pattern-based secret detection
   and injection heuristics have both false positives (→ quarantine, one
   command to release) and false negatives. Run dedicated scanners
@@ -149,9 +194,9 @@ and Linux are supported and covered by CI.
 
 ## When NOT to use this
 
-- You need semantic recall — ranking is keyword-based, no embeddings in M1.
+- You need semantic recall — ranking is keyword-based, no embeddings.
 - You expect the screen to catch everything — it is a heuristic filter; run dedicated scanners (gitleaks, devin-redact) alongside.
-- You want automatic memory extraction from sessions — `retain` stores what it is told; extraction is the `devin-learning` draft pipeline.
+- You expect `extract` to read intent — it matches keyword signals and defaults to `proposed` precisely because heuristics err.
 
 ## FAQ
 

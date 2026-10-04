@@ -104,6 +104,7 @@ def test_counts(tmp_path):
         store.insert("c", status="retracted")
         assert store.counts() == {
             "active": 1,
+            "proposed": 0,
             "quarantined": 1,
             "retracted": 1,
         }

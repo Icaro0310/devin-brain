@@ -2,9 +2,14 @@
 
 Subcommands:
 
-- ``retain "<content>" [--tags a,b] [--source-session ID] [--source-rowid N]``
+- ``retain "<content>" [--tags a,b] [--workspace PATH]``
+  ``[--source-session ID] [--source-rowid N]``
 - ``recall "<query>" [--limit N] [--tags a,b] [--json]``
-- ``quarantine [--list] [--release ID] [--json]``
+- ``quarantine [<id>] [--reason r] [--list] [--release ID] [--json]``
+- ``conflicts [--json]`` — contradiction pairs linked at retain time
+- ``extract <session-id|--latest> --sessions-db DB [--auto-approve]``
+- ``approve <id>`` — promote a proposed extraction to active
+- ``prime [--workspace PATH] [--max-tokens N]`` — hook context block
 - ``retract <id>`` · ``supersede <id> "<content>"`` · ``list``
 - ``export --out memories.jsonl [--all]``
 - ``verify <id> --sessions-db <sessions.db>``
@@ -95,6 +100,7 @@ def cmd_retain(args: argparse.Namespace) -> int:
             tags=_tags_arg(args.tags),
             source_session_id=args.source_session,
             source_rowid=args.source_rowid,
+            workspace=args.workspace,
         )
     if args.json:
         _print_json(entry.to_dict())
@@ -102,6 +108,8 @@ def cmd_retain(args: argparse.Namespace) -> int:
         line = f"id={entry.id} status={entry.status}"
         if entry.quarantine_reasons:
             line += f" reasons=[{', '.join(entry.quarantine_reasons)}]"
+        if entry.conflicts_with is not None:
+            line += f" conflicts={entry.conflicts_with}"
         print(line)
     return 0
 
@@ -132,6 +140,18 @@ def cmd_quarantine(args: argparse.Namespace) -> int:
                 _print_json(entry.to_dict())
             else:
                 print(f"id={entry.id} status={entry.status}")
+            return 0
+        if args.id is not None:
+            entry = ops.quarantine_entry(
+                store, args.id, reason=args.reason or "manual:user"
+            )
+            if args.json:
+                _print_json(entry.to_dict())
+            else:
+                print(
+                    f"id={entry.id} status={entry.status}"
+                    f" reasons=[{', '.join(entry.quarantine_reasons)}]"
+                )
             return 0
         entries = ops.list_entries(store, status="quarantined")
     if args.json:
@@ -196,6 +216,86 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_conflicts(args: argparse.Namespace) -> int:
+    with _open_store(args) as store:
+        pairs = ops.conflicts(store)
+    if args.json:
+        _print_json(
+            [
+                {"newer": new.to_dict(), "older": old.to_dict()}
+                for new, old in pairs
+            ]
+        )
+    elif pairs:
+        rows = [
+            [
+                str(new.id),
+                str(old.id),
+                _truncate(new.content, 38),
+                _truncate(old.content, 38),
+            ]
+            for new, old in pairs
+        ]
+        print(_fmt_table(["NEW_ID", "OLD_ID", "NEW", "EXISTING"], rows))
+    else:
+        print("no conflicts")
+    return 0
+
+
+def cmd_extract(args: argparse.Namespace) -> int:
+    with _open_store(args) as store:
+        report = ops.extract_session(
+            store,
+            args.sessions_db,
+            session_id=args.session_id,
+            latest=args.latest,
+            auto_approve=args.auto_approve,
+        )
+    if args.json:
+        _print_json(report)
+    else:
+        counts = {"proposed": 0, "active": 0, "quarantined": 0}
+        for item in report["items"]:
+            counts[item["status"]] = counts.get(item["status"], 0) + 1
+        print(
+            f"session={report['session_id']}"
+            f" scanned={report['nodes_scanned']}"
+            f" candidates={report['candidates']}"
+        )
+        print(
+            f"  proposed={counts.get('proposed', 0)}"
+            f" active={counts.get('active', 0)}"
+            f" quarantined={counts.get('quarantined', 0)}"
+            f" duplicates={report['skipped_duplicates']}"
+        )
+        print(
+            "  review with: devin-memory list --status proposed"
+            "  /  approve <id>"
+        )
+    return 0
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    with _open_store(args) as store:
+        entry = ops.approve(store, args.id)
+    if args.json:
+        _print_json(entry.to_dict())
+    else:
+        print(f"id={entry.id} status={entry.status}")
+    return 0
+
+
+def cmd_prime(args: argparse.Namespace) -> int:
+    with _open_store(args) as store:
+        text = ops.prime(
+            store,
+            workspace=args.workspace,
+            max_tokens=args.max_tokens,
+        )
+    print(text, end="")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
@@ -219,6 +319,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("retain", help="screen and store a memory")
     p.add_argument("content", help="the fact/lesson to remember")
     p.add_argument("--tags", metavar="a,b", help="comma-separated tags")
+    p.add_argument("--workspace", metavar="PATH",
+                   help="scope this memory to a workspace (default: global)")
     p.add_argument("--source-session", metavar="ID",
                    help="Devin session id this memory came from")
     p.add_argument("--source-rowid", type=int, metavar="N",
@@ -233,7 +335,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_recall)
 
-    p = sub.add_parser("quarantine", help="list quarantined entries / release one")
+    p = sub.add_parser(
+        "quarantine",
+        help="list quarantined / mark an entry / release one",
+    )
+    p.add_argument("id", type=int, nargs="?", metavar="ID",
+                   help="mark an existing entry as quarantined")
+    p.add_argument("--reason", metavar="R",
+                   help="quarantine reason stored for audit"
+                        " (default: manual:user)")
     p.add_argument("--list", action="store_true", help="list (default action)")
     p.add_argument("--release", type=int, metavar="ID",
                    help="move a quarantined entry back to active")
@@ -253,7 +363,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_supersede)
 
     p = sub.add_parser("list", help="list entries")
-    p.add_argument("--status", choices=["active", "quarantined", "retracted"])
+    p.add_argument(
+        "--status",
+        choices=["active", "proposed", "quarantined", "retracted"],
+    )
     p.add_argument("--limit", type=int, metavar="N")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_list)
@@ -272,6 +385,47 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sessions-db", required=True, metavar="PATH",
                    help="path to a Devin sessions.db")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser(
+        "conflicts",
+        help="list retain-time contradiction pairs (supersedes kept both)",
+    )
+    p.add_argument("--json", action="store_true", help="JSON output")
+    p.set_defaults(func=cmd_conflicts)
+
+    p = sub.add_parser(
+        "extract",
+        help="mine a session for durable knowledge -> proposed entries",
+    )
+    p.add_argument("session_id", nargs="?", metavar="SESSION_ID",
+                   help="session to scan (or use --latest)")
+    p.add_argument("--latest", action="store_true",
+                   help="scan the most recently active session")
+    p.add_argument("--sessions-db", required=True, metavar="PATH",
+                   help="path to a Devin sessions.db (read-only)")
+    p.add_argument("--auto-approve", action="store_true",
+                   help="store clean candidates as active (default: proposed)")
+    p.add_argument("--json", action="store_true", help="JSON output")
+    p.set_defaults(func=cmd_extract)
+
+    p = sub.add_parser(
+        "approve", help="promote a proposed extraction to active"
+    )
+    p.add_argument("id", type=int)
+    p.add_argument("--json", action="store_true", help="JSON output")
+    p.set_defaults(func=cmd_approve)
+
+    p = sub.add_parser(
+        "prime",
+        help="print a compact recalled-context block (UserPromptSubmit hook)",
+    )
+    p.add_argument("--workspace", metavar="PATH",
+                   help="only prime global + this-workspace memories")
+    p.add_argument("--max-tokens", type=int,
+                   default=ops.PRIME_DEFAULT_MAX_TOKENS, metavar="N",
+                   help="size bound; ~4 chars/token estimate"
+                        f" (default: {ops.PRIME_DEFAULT_MAX_TOKENS})")
+    p.set_defaults(func=cmd_prime)
 
     return parser
 

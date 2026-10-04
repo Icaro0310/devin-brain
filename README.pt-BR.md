@@ -6,52 +6,59 @@
 
 # devin-memory
 
-> **Projeto comunitário não oficial.** Sem afiliação, endosso ou patrocínio da
-> Cognition AI. "Devin" é marca registada da Cognition AI.
+> **Projeto comunitário não oficial.** Sem afiliação, endosso ou patrocínio
+> da Cognition AI. "Devin" é marca registrada da Cognition AI.
 
 **[English](README.md)** · Português (BR)
 
-Um armazenamento de memória anti-envenenamento para o Devin: factos duráveis
-com proveniência, versionamento e um portão de quarentena — para que a
-memória do agente não possa ser corrompida silenciosamente por uma sessão
-má ou por conteúdo injetado.
+Um armazenamento de memória anti-envenenamento para o Devin: fatos duráveis
+com proveniência, versionamento e uma fila de quarentena — para que a
+memória do agente não seja corrompida silenciosamente por uma sessão ruim
+ou por conteúdo injetado.
 
 ## O problema
 
-A memória do agente é um vetor de envenenamento. Qualquer ferramenta que
-persista "factos" entre sessões pode ser corrompida por uma única sessão má
-— uma instrução injetada ou um segredo colado torna-se uma crença confiável
-em todas as sessões futuras, sem revisão e sem forma de responder *"de onde
-isto veio?"*.
+Memória de agente é um vetor de envenenamento. Qualquer ferramenta que
+persiste "fatos" entre sessões pode ser corrompida por uma única sessão
+ruim — uma instrução injetada ou um segredo colado vira uma crença
+confiável em todas as sessões futuras, sem etapa de revisão e sem como
+responder *"de onde isso veio?"*.
 
-## Trabalho anterior (prior art)
+## Trabalhos anteriores
 
-- O **memory MCP do Devin** (`retain`/`recall`/`reflect` sobre
-  `.devin/memory/memories.jsonl`) — append-only, sem triagem, sem
-  proveniência de sessão. O `devin-memory` exporta exatamente esse formato.
+- O **MCP de memória do Devin** (`retain`/`recall`/`reflect` sobre
+  `.devin/memory/memories.jsonl`) — só anexa, sem triagem e sem
+  proveniência de sessão. O `devin-memory` exporta exatamente nesse
+  formato de linha.
 - **MemGPT / memória do LangChain** — camadas de persistência otimizadas
-  para recall, não para auditar ou desconfiar do que foi gravado.
+  para relembrar, não para auditar ou desconfiar do que foi guardado.
 
-O `devin-memory` adapta a ideia de memory store; adiciona as partes que
-essas ferramentas não têm: um portão de quarentena e proveniência até às
-linhas reais da sessão.
+O `devin-memory` adapta a ideia de armazenamento de memória; ele adiciona
+as partes que essas ferramentas não têm: um portão de quarentena e
+proveniência até linhas reais de sessão.
 
-## O que o torna Devin-native
+## O que o torna nativo do Devin
 
 1. **Lado a lado:** cada entrada pode carregar `source_session_id` +
-   `source_rowid`, auditável contra o `sessions.db` do Devin via store
-   read-only do `devin-internals` — o memory MCP não consegue verificar que
-   a sessão (ou a linha de mensagem) alegada alguma vez existiu. O portão
-   de quarentena também tria cada escrita para formas de segredo e de
-   injeção.
+   `source_rowid`, auditáveis contra o `sessions.db` do Devin via o
+   armazenamento somente-leitura do `devin-internals` — o MCP de memória
+   não consegue verificar se uma sessão de origem alegada (ou uma linha
+   de mensagem específica) realmente existiu. O portão de quarentena
+   também tria cada escrita em busca de formatos de segredo e de injeção.
 2. **Sem Devin:** sem `sessions.db` não há proveniência de sessão para
    auditar — o extra desaparece.
-3. **Uma frase:** *é uma memória que lembra de onde cada memória veio — e
-   põe as suspeitas em quarentena até um humano as libertar.*
+3. **Em uma frase:** *é um armazenamento de memória que lembra de onde
+   cada memória veio — e põe em quarentena as suspeitas até um humano
+   liberá-las.*
 
 ## Instalação
 
-Requer Python ≥ 3.10 e `pipx`. **Windows (PowerShell):** instale `pipx` com `py -m pip install --user pipx`, execute `py -m pipx ensurepath` e reabra o terminal. **Linux (Debian/Ubuntu):** execute `sudo apt install pipx python3-venv` e `pipx ensurepath`; reabra o terminal. Noutras distribuições Linux, instale `pipx` pelo gestor de pacotes.
+É necessário Python ≥ 3.10 e `pipx`. **Windows (PowerShell):** instale o
+`pipx` com `py -m pip install --user pipx`, rode `py -m pipx ensurepath` e
+reabra o terminal. **Linux (Debian/Ubuntu):** rode
+`sudo apt install pipx python3-venv` e `pipx ensurepath`; reabra o
+terminal. Outras distribuições devem instalar o `pipx` pelo gerenciador
+de pacotes.
 
 ```bash
 pipx install "devin-memory @ git+https://github.com/Icaro0310/devin-memory.git"
@@ -67,108 +74,182 @@ pytest
 ## Uso
 
 ```bash
-# Guardar um facto (triado na escrita; conteúdo suspeito vai para quarentena)
-devin-memory retain "CI verde em Windows + Linux" --tags ci,status
+# Guardar um fato (triado na escrita; conteúdo suspeito vai para quarentena)
+devin-memory retain "CI verde no Windows + Linux" --tags ci,status
 devin-memory retain "..." --source-session <session-id> --source-rowid <n>
+devin-memory retain "..." --workspace /caminho/do/projeto  # escopo de workspace
 
-# Recall com ranking por keywords — devolve apenas entradas ativas
+# Recall com ranking por palavra-chave — só devolve entradas ativas
 devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
 
-# Rever e libertar entradas em quarentena
-devin-memory quarantine                 # lista com razões
-devin-memory quarantine --release <id>  # override humano -> active
+# Fila de quarentena: listar, marcar uma entrada existente ou liberar
+devin-memory quarantine                          # lista com motivos
+devin-memory quarantine <id> [--reason manual:x] # marca entrada como quarentenada
+devin-memory quarantine --release <id>           # override humano -> ativa
+
+# Contradições: um retain conflitante é vinculado, não sobrescrito
+devin-memory conflicts [--json]     # pares (nova, antiga); resolva com
+                                    # supersede / retract / quarantine <id>
+
+# Minerar uma sessão em busca de conhecimento durável -> entradas
+# "proposed" (inativas até revisão); extração é heurística — ver
+# "Limitações"
+devin-memory extract <session-id> --sessions-db caminho/para/sessions.db
+devin-memory extract --latest --sessions-db caminho/para/sessions.db [--auto-approve]
+devin-memory list --status proposed   # fila de revisão
+devin-memory approve <id>             # proposed -> ativa
+
+# Bloco de contexto para um hook UserPromptSubmit — só entradas ativas,
+# filtradas por workspace + perfil da máquina, limitado a ~4 chars/token
+devin-memory prime [--workspace PATH] [--max-tokens N]
 
 # Versionamento e manutenção
-devin-memory supersede <id> "facto corrigido"
+devin-memory supersede <id> "fato corrigido"
 devin-memory retract <id>
-devin-memory list [--status active|quarantined|retracted] [--json]
+devin-memory list [--status active|proposed|quarantined|retracted] [--json]
 
-# Auditar a proveniência de uma entrada contra um sessions.db (read-only)
+# Auditar a proveniência de uma entrada contra um sessions.db real
+# (somente leitura)
 devin-memory verify <id> --sessions-db caminho/para/sessions.db
 
-# Exportar memórias ativas para JSONL compatível com o memory MCP
+# Exportar memórias ativas para um JSONL compatível com o MCP de memória
 devin-memory export --out memories.jsonl
 ```
 
-## Aprender com sessões: `devin-learning`
+## Aprenda com sessões usando o `devin-learning`
 
-Este CLI auxiliar extrai lições candidatas de um `sessions.db` e grava drafts
-revisáveis de skills. Por defeito, não os instala no workspace.
+Esta CLI companheira extrai lições candidatas de um `sessions.db` e escreve
+rascunhos de skills revisáveis. Por padrão não instala rascunhos em um
+workspace.
 
 ```bash
-devin-learning extract --sessions-db caminho/sessions.db --out ./learning-drafts
+devin-learning extract --sessions-db caminho/para/sessions.db --out ./learning-drafts
 devin-learning review --out ./learning-drafts
 
-# Depois de rever os drafts, permite explicitamente escrever na pasta ativa:
-devin-learning extract --sessions-db caminho/sessions.db --out .devin/skills --apply
+# Depois de revisar os rascunhos, permita explicitamente a saída para um
+# diretório de skills ativo:
+devin-learning extract --sessions-db caminho/para/sessions.db --out .devin/skills --apply
 ```
 
-`review` é dry-run por omissão; `review --apply` move drafts rejeitados para
-`_rejected/`. O extractor lê conteúdo das sessões: mantém os resultados
-privados até os reveres.
+`review` é um dry-run a menos que `--apply` seja passado; `review --apply`
+move rascunhos rejeitados para `_rejected/`. O extrator lê o conteúdo das
+sessões, então mantenha a saída privada até revisar.
 
-A base de dados é `./memory.db` por defeito — muda com `--db` ou
-`DEVIN_MEMORY_DB`. É o único store em que esta ferramenta escreve; o
+## Estados da memória
+
+`active` · `proposed` (extraída, aguardando `approve`) · `quarantined`
+(triada ou marcada manualmente, aguardando `release`) · `retracted`
+(retirada ou substituída). Apenas entradas `active` aparecem em
+`recall`/`prime`/`export` — conteúdo em quarentena nunca é impresso nem
+recuperado.
+
+## Conflitos, extração e prime (heurísticas)
+
+- **Conflitos** — um `retain` que dá a diretiva oposta sobre o mesmo
+  assunto normalizado de uma entrada ativa existente é guardado ao lado
+  dela com um vínculo `conflicts_with` (`devin-memory conflicts`). A
+  heurística compara uma "chave de assunto" sem stop-words mais a
+  polaridade afirmativa/proibitiva — ela deliberadamente perde
+  contradições reformuladas em vez de vincular fatos sem relação.
+- **`extract`** varre os `message_nodes` de uma sessão (somente leitura
+  via devin-internals) em busca de sinais de conhecimento durável —
+  correções do usuário ("na verdade", "actually", "the right way"),
+  preferências ("always", "never", "sempre", "nunca"), comandos
+  descobertos (ferramentas conhecidas entre crases) e caminhos.
+  Candidatos passam pela mesma triagem de qualquer escrita: os limpos
+  viram `proposed`, os suspeitos `quarantined`. `--auto-approve` pula a
+  etapa de revisão.
+- **`prime`** emite um bloco compacto
+  `# devin-memory: recalled context (heuristic)` dimensionado para um
+  hook de prompt. Entradas com escopo de `retain --workspace` só aparecem
+  dentro daquele workspace; entradas escritas sob outro perfil de máquina
+  nunca aparecem (o perfil tem padrão `corporate` — falha fechada).
+
+O armazenamento é `./memory.db` por padrão — sobrescreva com `--db` ou
+`DEVIN_MEMORY_DB`. É o único armazenamento em que esta ferramenta escreve;
 `sessions.db`, `acp-messages/*.db` e `state.vscdb` do Devin são apenas
-lidos, nunca modificados.
+lidos.
 
 ## Funciona só com o Devin (modo Devin-only)
 
-O devin-memory mantém uma store de memória local (JSONL) com proveniência e
-uma faixa de quarentena — sem serviço externo de memória, sem chamadas de
-rede. Ambos os executáveis (`devin-memory` e `devin-learning`) correm apenas
-na tua máquina.
+O devin-memory mantém um armazenamento local de memória com rastreamento
+de proveniência e uma fila de quarentena — sem serviço de memória externo,
+sem chamadas de rede. Ambos os scripts de console (`devin-memory` e
+`devin-learning`) rodam apenas na sua máquina.
 
-Ressalva honesta: a filtragem na escrita é uma heurística, não uma garantia —
-entradas suspeitas vão para quarentena para **revisão humana**, mantém esse
-hábito.
+Ressalva honesta: a triagem na escrita é uma heurística, não uma garantia —
+entradas suspeitas vão para a quarentena para **revisão humana**, então
+mantenha esse hábito.
 
-## Suporte de plataformas
+## Suporte de plataforma
 
-A memória usa um caminho SQLite local explícito e o banco de sessões é passado
-por `--sessions-db`; não assume um path específico do SO. Windows e Linux são
-suportados e testados no CI.
+O armazenamento de memória usa um caminho SQLite local explícito e o banco
+de sessões é informado com `--sessions-db`; nenhum caminho específico de
+plataforma é assumido. Windows e Linux são suportados e cobertos por CI.
 
 ## Limitações
 
-- **M1 é uma primitiva — ainda não há extração automática.** `retain`
-  guarda o que lhe é dito; transformar sessões em memórias é M2 (pipeline
-  `devin-learning`).
-- **A triagem é um filtro, não uma garantia.** Deteção de segredos por
+- **A extração é heurística e propõe por padrão.** `extract` levanta
+  frases com sinais de palavra-chave de uma sessão para uma fila de
+  revisão `proposed` — nada fica ativo sem `approve` (ou
+  `--auto-approve`). Para um pipeline de lições mais rico, veja o
+  `devin-learning`.
+- **A triagem é um filtro, não uma garantia.** Detecção de segredos por
   padrões e heurísticas de injeção têm falsos positivos (→ quarentena, um
-  comando para libertar) e falsos negativos. Corre também scanners
-  dedicados (gitleaks, `devin-redact`) — isto complementa-os.
-- **O ranking do recall é por keywords**, determinístico e documentado —
-  sem embeddings nem pesquisa semântica no M1.
-- **Proveniência é registada, não auto-verificada.** `retain` guarda o
-  `source_session_id`/`source_rowid` alegado; `verify` audita-o contra um
-  `sessions.db` real depois. Um mau ator pode alegar proveniência falsa —
-  a diferença é que é *verificável*.
-- **Supersessões em quarentena reformam a versão antiga na mesma.** Se a
-  substituição ficar em quarentena, revê a fila (`quarantine --release`).
-- **Ainda não está no PyPI** — instala a partir do repositório por agora.
+  comando para liberar) e falsos negativos. Rode scanners dedicados
+  (gitleaks, `devin-redact`) também — isto os complementa.
+- **O ranking do recall é por palavra-chave**, determinístico e
+  documentado — sem embeddings nem busca semântica.
+- **A proveniência é registrada, não auto-verificável.** `retain` guarda
+  o `source_session_id`/`source_rowid` alegado; `verify` o audita depois
+  contra um `sessions.db` real. Um ator mal-intencionado pode alegar
+  proveniência falsa — o ponto é que ela é *verificável*.
+- **Substituições em quarentena ainda aposentam a versão antiga.** Se a
+  substituta for para quarentena, revise a fila (`quarantine --release`).
+- **Ainda não está no PyPI** — instale a partir do repositório por ora.
 
 ## Quando usar
 
-- Você persiste memória de agente entre sessões e quer desconfiança por defeito: cada escrita é rastreada, entradas suspeitas vão para quarentena até libertação humana.
-- Você precisa de responder "de onde veio esta memória?" — as entradas carregam `source_session_id`/`source_rowid`, auditáveis via `verify`.
-- Você quer versionamento de memória — `supersede`/`retract` mantêm histórico em vez de edições silenciosas.
-- Você quer manter compatibilidade: `export` escreve o formato de linha `memories.jsonl` do memory MCP do Devin.
+- Você persiste memória de agente entre sessões e quer desconfiança por
+  padrão: toda escrita triada, entradas suspeitas em quarentena para
+  liberação humana.
+- Você precisa responder "de onde veio esta memória?" — entradas carregam
+  `source_session_id`/`source_rowid`, auditáveis via `verify`.
+- Você quer versionamento de memória — `supersede`/`retract` mantêm
+  histórico em vez de edições silenciosas.
+- Você quer injetar contexto lembrado no prompt — `prime` emite um bloco
+  compacto e limitado para um hook `UserPromptSubmit`.
+- Você quer manter compatibilidade: `export` escreve o formato de linha
+  `memories.jsonl` do MCP de memória do Devin.
 
 ## Quando NÃO usar
 
-- Você precisa de recall semântico — o ranking é por keywords, sem embeddings no M1.
-- Você espera que o screening apanhe tudo — é um filtro heurístico; corra scanners dedicados (gitleaks, devin-redact) em paralelo.
-- Você quer extração automática de memória das sessões — `retain` guarda o que lhe é dito; a extração é o pipeline draft `devin-learning`.
+- Você precisa de recall semântico — o ranking é por palavra-chave, sem
+  embeddings.
+- Você espera que a triagem capture tudo — é um filtro heurístico; rode
+  scanners dedicados (gitleaks, devin-redact) em paralelo.
+- Você espera que o `extract` leia intenção — ele casa sinais de
+  palavra-chave e propõe por padrão justamente porque heurísticas erram.
 
 ## FAQ
 
-**Como evito que a memória do agente seja envenenada por uma sessão má?** Use `devin-memory retain` em vez de acrescentar a um store cru. Cada escrita é rastreada quanto a formas de segredos e injeção — entradas suspeitas caem em quarentena e só ficam ativas depois de um humano correr `quarantine --release <id>`.
+**Como evito que a memória do agente seja envenenada por uma sessão ruim?**
+Use `devin-memory retain` em vez de anexar a um armazenamento bruto. Toda
+escrita é triada em busca de formatos de segredo e injeção — entradas
+suspeitas vão para a quarentena e só ficam ativas depois que um humano
+roda `quarantine --release <id>`.
 
-**O devin-memory consegue provar que uma memória veio de uma sessão real?** Sim, via proveniência registada. `retain --source-session <id> --source-rowid <n>` guarda a origem declarada, e `devin-memory verify <id> --sessions-db <path>` audita-a em read-only contra o `sessions.db` real do Devin — uma origem fabricada é verificável, não aceite cegamente.
+**O devin-memory prova que uma memória veio de uma sessão real?** Sim, via
+proveniência registrada. `retain --source-session <id> --source-rowid <n>`
+guarda a origem alegada, e `devin-memory verify <id> --sessions-db
+<caminho>` a audita em modo somente-leitura contra o `sessions.db` real do
+Devin — uma origem fabricada é verificável, não confiada cegamente.
 
-**O devin-memory substitui o memory MCP do Devin?** Complementa-o. O MCP é append-only e sem screening; o devin-memory adiciona quarentena, proveniência e versionamento, e `devin-memory export --out memories.jsonl` produz exatamente o formato de linha que o MCP lê.
+**O devin-memory substitui o MCP de memória do Devin?** Ele o complementa.
+O MCP só anexa, sem triagem; o devin-memory adiciona quarentena,
+proveniência e versionamento, e `devin-memory export --out memories.jsonl`
+produz exatamente o formato de linha que o MCP lê.
 
 ## Licença
 
-MIT — vê [LICENSE](LICENSE).
+MIT — veja [LICENSE](LICENSE).

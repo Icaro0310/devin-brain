@@ -1,6 +1,31 @@
 # STATUS — devin-memory
 
-Updated: 2026-09-29 · Milestone: **M1 (done)** · Version: 0.1.0
+Updated: 2026-10-04 · Milestone: **F4 (done)** · Version: 0.2.0+unreleased
+
+## Done in F4 (MM-3 → MM-2 → MM-1 → MM-4)
+
+- **MM-3** — `quarantine <id> [--reason r]` marks an existing entry
+  (active/proposed → quarantined, reasons appended). `screen.py` gained
+  devin-redact's `devin_pairing_code` pattern — all its secret categories
+  are now vendored.
+- **MM-2** — `devin_memory/conflict.py`: subject-key + polarity heuristic;
+  a contradictory `retain` is stored alongside the existing entry with a
+  `conflicts_with` link (new column). `devin-memory conflicts` lists the
+  (newer, older) pairs. `retain --workspace` scopes entries (new column).
+- **MM-1** — `devin_memory/extract.py` + `extract <session-id|--latest>
+  --sessions-db DB`: mines `message_nodes` (read-only) for
+  correction/preference/command/path signals (EN+PT) into `proposed`
+  entries (new status); `approve <id>` promotes, `--auto-approve` skips
+  review. Extraction reports never echo content.
+- **MM-4** — `prime [--workspace PATH] [--max-tokens N]`: hook-ready
+  context block — active only, workspace+profile filtered (corporate
+  default, fail-closed), ~4 chars/token bounded.
+- Migration: new columns via `ALTER TABLE` (additive); the `status` CHECK
+  predating `proposed` is widened by the canonical rename→recreate→
+  ordered-copy→drop rebuild (self-FKs point at older ids, so `ORDER BY
+  id` keeps the copy consistent under `foreign_keys = ON`).
+- Tests: **151 green** (43 new: conflicts/migration, extraction, prime,
+  MM-3 ops). README EN + PT-BR updated.
 
 ## Done in M1
 
