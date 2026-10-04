@@ -2,6 +2,8 @@
 
 <img src="assets/banner.svg" alt="devin-memory" width="100%"/>
 
+<a href="https://m8ven.ai/mcp/icaro0310/devin-memory?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310/devin-memory" alt="M8ven Score"/></a>
+
 </div>
 
 # devin-memory
