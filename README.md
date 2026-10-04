@@ -2,6 +2,8 @@
 
 <img src="assets/banner.svg" alt="devin-memory" width="100%"/>
 
+<a href="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml"><img src="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml/badge.svg" alt="ci"/></a>
+<a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-memory"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-memory/badge" alt="OpenSSF Scorecard"/></a>
 <a href="https://m8ven.ai/mcp/icaro0310/devin-memory?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310/devin-memory" alt="M8ven Score"/></a>
 
 </div>
