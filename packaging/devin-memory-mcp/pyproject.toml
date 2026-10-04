@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Shim package so `uvx devin-memory-mcp` works: uvx resolves the tool name to
+# a package of the same name, and the real MCP entry point lives in
+# devin-memory's devin-memory-mcp console script (the devin-memory script is
+# the CLI, not the server). This package just depends on the real one and
+# re-exposes the entry point.
+[project]
+name = "devin-memory-mcp"
+version = "0.3.0"
+description = "MCP server entry point for devin-memory — anti-poisoning memory layer for coding agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Icaro Galvao" }]
+keywords = ["mcp", "memory", "agents", "context"]
+dependencies = ["devin-memory[mcp]>=0.3.0"]
+
+[project.scripts]
+devin-memory-mcp = "devin_memory.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/Icaro0310/devin-memory"
+Repository = "https://github.com/Icaro0310/devin-memory"
+
+[tool.setuptools]
+py-modules = []
