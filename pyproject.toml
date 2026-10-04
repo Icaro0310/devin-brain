@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devin-memory"
-version = "0.2.0"
+version = "0.3.0"
 description = "Anti-poisoning memory layer for Devin — reviewed, versioned, provenance-tracked durable memory."
 readme = "README.md"
 license = { text = "MIT" }
@@ -17,10 +17,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+mcp = ["mcp>=1.9"]
 
 [project.scripts]
 devin-memory = "devin_memory.cli:main"
 devin-learning = "devin_memory.learning.cli:main"
+devin-memory-mcp = "devin_memory.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

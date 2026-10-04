@@ -2,6 +2,15 @@
 
 ## Unreleased (F4)
 
+- **MCP server** — `devin_memory.mcp_server` exposes the same ops over
+  stdio as a real MCP server (`devin-memory-mcp` console script,
+  `mcp>=1.9` optional extra, SDK 1.x/2.x compatible). Tools: `retain`,
+  `recall`, `screen` (dry-run), `list`, `retract`, `supersede`,
+  `quarantine`, `release`, `approve`, `conflicts`, `prime`, `verify`,
+  `extract`. `server.json` added for the Official MCP Registry;
+  `<!-- mcp-name: io.github.icaro0310/devin-memory -->` ownership marker
+  in the READMEs.
+
 - **MM-3** — `quarantine <id> [--reason r]` marks an existing entry
   (active or proposed → quarantined; reasons appended for audit).
   `screen.py` now vendors devin-redact's `devin_pairing_code` pattern too.

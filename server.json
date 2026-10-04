@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.icaro0310/devin-memory",
+  "description": "Anti-poisoning memory layer for coding agents — durable memories with provenance, versioning, conflict detection and a quarantine gate that screens every write for secrets and prompt injection.",
+  "version": "0.3.0",
+  "repository": {
+    "url": "https://github.com/Icaro0310/devin-memory",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "devin-memory",
+      "version": "0.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        "devin-memory-mcp"
+      ],
+      "environmentVariables": [
+        {
+          "name": "DEVIN_MEMORY_DB",
+          "description": "Path to memory.db (default: ./memory.db)",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

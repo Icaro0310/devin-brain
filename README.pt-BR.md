@@ -120,6 +120,37 @@ devin-memory verify <id> --sessions-db caminho/para/sessions.db
 devin-memory export --out memories.jsonl
 ```
 
+## Servidor MCP
+
+<!-- mcp-name: io.github.icaro0310/devin-memory -->
+
+O `devin-memory` também é um servidor MCP de verdade (stdio) — o mesmo
+pipeline retain/recall com a trava de quarentena em cada escrita,
+chamável do Devin, Claude Desktop, Cursor ou qualquer cliente MCP:
+
+```bash
+pipx install "devin-memory[mcp] @ git+https://github.com/Icaro0310/devin-memory.git"
+```
+
+Configuração do cliente:
+
+```json
+{
+  "mcpServers": {
+    "devin-memory": {
+      "command": "devin-memory-mcp",
+      "args": ["--db", "/caminho/para/memory.db"]
+    }
+  }
+}
+```
+
+Tools: `retain`, `recall`, `screen` (teste seco da trava, sem escrita),
+`list`, `retract`, `supersede`, `quarantine`, `release`, `approve`,
+`conflicts`, `prime`, `verify`, `extract`. Toda tool devolve dados
+estruturados ou um objeto `{"error", "detail"}` — nada sobe pelo
+transporte. `DEVIN_MEMORY_DB` funciona como alternativa a `--db`.
+
 ## Aprenda com sessões usando o `devin-learning`
 
 Esta CLI companheira extrai lições candidatas de um `sessions.db` e escreve
