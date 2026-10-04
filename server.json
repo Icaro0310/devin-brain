@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.icaro0310/devin-memory",
+  "name": "io.github.Icaro0310/devin-memory",
   "description": "Anti-poisoning memory for agents: provenance, conflicts, quarantine gate.",
   "version": "0.3.0",
   "repository": {
@@ -11,7 +11,7 @@
     {
       "registryType": "pypi",
       "identifier": "devin-memory-mcp",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

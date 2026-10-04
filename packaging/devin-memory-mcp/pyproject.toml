@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 # re-exposes the entry point.
 [project]
 name = "devin-memory-mcp"
-version = "0.3.0"
+version = "0.3.1"
 description = "MCP server entry point for devin-memory — anti-poisoning memory layer for coding agents"
 readme = "README.md"
 requires-python = ">=3.10"
