@@ -1,6 +1,8 @@
-# devin-memory — Windows guide
+# devin-memory — Personal Windows guide
 
-This guide covers Windows setup only. See [README.md](README.md) for features, shared commands, limitations, and the safety model.
+This guide covers unrestricted Windows setup. For restricted machines, see [README.corporate-windows.md](README.corporate-windows.md); for features, shared commands, limitations, and the safety model, see [README.md](README.md).
+
+Personal Windows uses the extended runtime: local execution plus optional Devin VM/QwenPaw delegation when this artifact supports it.
 
 ## Prerequisites
 
@@ -19,9 +21,10 @@ uv tool install "devin-memory[mcp]==0.3.0"
 Session data normally lives under `%APPDATA%\devin\cli\`; UI state and ACP stores under `%APPDATA%\Devin\User\`.
 Use the tool's documented `--data-dir` or `--config-dir` flags for non-default locations.
 
-## Platform notes
+## Environment notes
 
-- Windows and Linux are the initial tested platforms.
+- Delegated runtime is optional; this guide installs local tooling only.
+- Corporate Windows is a separate local-only environment.
 - macOS is planned but not claimed as tested.
 
 ## Troubleshooting
