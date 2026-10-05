@@ -7,8 +7,8 @@
 2. **Small commits.** One logical change per commit; describe *why*, not *what*.
 3. **No live-database writes by default.** Treat Devin's stores as read-only
    unless the feature explicitly mutates them behind a flag.
-4. **Bilingual docs.** Changes to `README.md` must be mirrored in
-   `README.pt-BR.md`.
+4. **Platform docs.** Keep shared behavior in `README.md`; keep Windows and
+   Linux setup, paths, commands, and troubleshooting in their OS-specific guides.
 
 ## Setup
 

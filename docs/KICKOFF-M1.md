@@ -2,7 +2,7 @@
 
 Dedicated session for THIS repo — this is a RESEARCH wave project; be
 conservative, document uncertainty, prefer primitives over magic.
-`docs/SPEC.md` EN, bilingual READMEs, logic in `src/devin_memory/` + thin
+`docs/SPEC.md` EN, a shared README plus Windows/Linux platform guides, logic in `src/devin_memory/` + thin
 `cli.py`, small commits + Devin trailer, push, STATUS.md + CHANGELOG.md.
 
 ## One sentence

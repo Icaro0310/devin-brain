@@ -14,7 +14,7 @@
 > **Unofficial community project.** Not affiliated with, endorsed by, or
 > sponsored by Cognition AI. "Devin" is a trademark of Cognition AI.
 
-**[Português (BR)](README.pt-BR.md)** · English
+**[Windows](README.windows.md)** · **[Linux](README.linux.md)** · English
 
 An anti-poisoning memory store for Devin: durable facts with provenance,
 versioning, and a quarantine gate — so agent memory can't be silently
@@ -55,7 +55,7 @@ don't have: a quarantine gate and provenance back to real session rows.
 Python ≥ 3.10 and `pipx` are required. **Windows (PowerShell):** install `pipx` with `py -m pip install --user pipx`, run `py -m pipx ensurepath`, then reopen the terminal. **Linux (Debian/Ubuntu):** run `sudo apt install pipx python3-venv` and `pipx ensurepath`; reopen the terminal. Other Linux distributions should install `pipx` using their package manager.
 
 ```bash
-pipx install "devin-memory @ git+https://github.com/Icaro0310/devin-memory.git"
+pipx install "devin-memory==0.3.0"
 ```
 
 For development:
@@ -117,7 +117,7 @@ pipeline with the quarantine gate on every write, callable from Devin,
 Claude Desktop, Cursor or any MCP client:
 
 ```bash
-pipx install "devin-memory[mcp] @ git+https://github.com/Icaro0310/devin-memory.git"
+pipx install "devin-memory-mcp==0.3.1"
 ```
 
 Client config:
@@ -219,7 +219,7 @@ and Linux are supported and covered by CI.
   the point is that it is *checkable*.
 - **Quarantined supersessions still retire the old version.** If the
   replacement quarantines, review the queue (`quarantine --release`).
-- **Not on PyPI yet** — install from the repo for now.
+- **PyPI distributions:** `devin-memory` for the CLI and optional MCP extra; `devin-memory-mcp` is the standalone MCP-registry package.
 
 ## When to use this
 
