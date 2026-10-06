@@ -1,7 +1,8 @@
 name: publish
 
 # Builds the package and publishes to PyPI via the reusable workflow in
-# devin-powerups. Requires repo secret PYPI_API_TOKEN.
+# devin-powerups. Uses repo secret PYPI_API_TOKEN (PyPI Trusted
+# Publishing via OIDC is used automatically when the secret is absent).
 # Triggers: publishing a GitHub Release, or manual Actions dispatch.
 
 on:
@@ -12,8 +13,7 @@ on:
 jobs:
   publish:
     permissions:
-      contents: read
-      id-token: write  # passed through to the reusable job for OIDC
+      id-token: write
     uses: Icaro0310/devin-powerups/.github/workflows/pypi-publish.yml@main
     secrets:
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
