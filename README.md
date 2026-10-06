@@ -5,7 +5,7 @@
 <a href="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml"><img src="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml/badge.svg" alt="ci"/></a>
 <a href="https://pypi.org/project/devin-memory/"><img src="https://img.shields.io/pypi/v/devin-memory" alt="PyPI"/></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-memory"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-memory/badge" alt="OpenSSF Scorecard"/></a>
-<a href="https://m8ven.ai/mcp/icaro0310/devin-memory?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310/devin-memory" alt="M8ven Score"/></a>
+<a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx?v=f8137148c38155b2c757b9c351dbac17" alt="M8ven Score"/></a>
 <a href="https://glama.ai/mcp/servers/Icaro0310/devin-memory"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-memory/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-blueviolet" alt="MCP Registry"/></a>
 
