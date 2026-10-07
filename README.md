@@ -63,10 +63,13 @@ don't have: a quarantine gate and provenance back to real session rows.
 
 ## Install
 
-Python ≥ 3.10 and `pipx` are required. **Windows (PowerShell):** install `pipx` with `py -m pip install --user pipx`, run `py -m pipx ensurepath`, then reopen the terminal. **Linux (Debian/Ubuntu):** run `sudo apt install pipx python3-venv` and `pipx ensurepath`; reopen the terminal. Other Linux distributions should install `pipx` using their package manager.
+Python ≥ 3.10 required; install with `uv` (recommended) or `pipx`.
 
 ```bash
-pipx install "devin-memory"
+uv tool install 'devin-memory[mcp]'
+
+# or with pipx (alternative)
+pipx install 'devin-memory[mcp]'
 ```
 
 For development:
