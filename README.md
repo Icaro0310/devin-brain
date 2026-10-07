@@ -66,7 +66,7 @@ don't have: a quarantine gate and provenance back to real session rows.
 Python ≥ 3.10 and `pipx` are required. **Windows (PowerShell):** install `pipx` with `py -m pip install --user pipx`, run `py -m pipx ensurepath`, then reopen the terminal. **Linux (Debian/Ubuntu):** run `sudo apt install pipx python3-venv` and `pipx ensurepath`; reopen the terminal. Other Linux distributions should install `pipx` using their package manager.
 
 ```bash
-pipx install "devin-memory==0.3.0"
+pipx install "devin-memory"
 ```
 
 For development:
@@ -128,7 +128,7 @@ pipeline with the quarantine gate on every write, callable from Devin,
 Claude Desktop, Cursor or any MCP client:
 
 ```bash
-pipx install "devin-memory-mcp==0.3.1"
+pipx install "devin-memory-mcp"
 ```
 
 Client config:
