@@ -31,6 +31,7 @@
   by a ~4 chars/token estimate.
 - New `proposed` status: `active` · `proposed` · `quarantined` ·
   `retracted`. Only `active` surfaces in recall/prime/export.
+- `llms.txt` no longer states a hard-coded ecosystem size; the registry owns the count.
 
 ## 0.2.0
 
