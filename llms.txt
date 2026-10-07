@@ -23,4 +23,4 @@ Agent memory is a poisoning vector: any tool persisting "facts" between sessions
 - Not when: you need semantic/embedding search (recall is keyword-based in M1); you expect the screen to be a guarantee (heuristics have false positives and negatives — run dedicated scanners like gitleaks/devin-redact too); you want auto-extraction as a primitive (`retain` stores what it is told; extraction is the devin-learning pipeline).
 
 ## Related
-- [devin-ecosystem](https://icaro0310.github.io/): the 20+ tool ecosystem this belongs to
+- [devin-ecosystem](https://icaro0310.github.io/): the tool ecosystem this belongs to
