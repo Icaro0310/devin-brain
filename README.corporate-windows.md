@@ -13,7 +13,7 @@ Corporate Windows is a local-only environment: no Devin VM, QwenPaw, Slack depen
 Install the isolated Python CLI:
 
 ```powershell
-uv tool install "devin-memory[mcp]==0.3.0"
+uv tool install "devin-memory[mcp]"
 ```
 
 ## Devin paths

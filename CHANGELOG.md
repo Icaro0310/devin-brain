@@ -33,6 +33,8 @@
   `retracted`. Only `active` surfaces in recall/prime/export.
 - `llms.txt` no longer states a hard-coded ecosystem size; the registry owns the count.
 
+- **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
+
 ## 0.2.0
 
 - Absorbed the `devin-learning` project: extract/report/review/skills now
