@@ -2,6 +2,8 @@
 
 ## Unreleased (F4)
 
+- **CI** — `labeler.yml` is now a thin caller of the shared reusable workflow in `devin-powerups` (`@v1`); PR labeling behavior is unchanged.
+
 - **Install** — README now recommends `uv tool install 'devin-memory[mcp]'` (PyPI) as the primary route; `pipx` documented as alternative.
 
 - **MCP server** — `devin_memory.mcp_server` exposes the same ops over
