@@ -67,8 +67,11 @@ Python ≥ 3.10 required; install with `uv` (recommended) or `pipx`.
 
 ```bash
 uv tool install 'devin-memory[mcp]'
+```
 
-# or with pipx (alternative)
+or with `pipx` (alternative):
+
+```bash
 pipx install 'devin-memory[mcp]'
 ```
 
