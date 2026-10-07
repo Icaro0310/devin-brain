@@ -2,6 +2,8 @@
 
 ## Unreleased (F4)
 
+- **Install** — README now recommends `uv tool install 'devin-memory[mcp]'` (PyPI) as the primary route; `pipx` documented as alternative.
+
 - **MCP server** — `devin_memory.mcp_server` exposes the same ops over
   stdio as a real MCP server (`devin-memory-mcp` console script,
   `mcp>=1.9` optional extra, SDK 1.x/2.x compatible). Tools: `retain`,
