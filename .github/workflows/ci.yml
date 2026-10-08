@@ -1,4 +1,7 @@
 name: ci
+# Intentionally NOT a thin caller: Installs sibling deps from git pins before pip install -e.
+# See Icaro0310/devin-powerups .github/workflows/VARIANTS.md.
+
 
 on:
   push:
