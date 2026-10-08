@@ -19,9 +19,9 @@
 </div>
 
 <!-- DEVIN-ECO:BEGIN -->
-> **Part of the [DEVIN ecosystem](https://github.com/Icaro0310/awesome-devin)**
-> Track: Control · Nature: product
-> For: AI engineers, developers
+> **Part of the [DEVIN ecosystem](https://github.com/Icaro0310/awesome-devin)**  
+> Track: Control · Nature: product  
+> For: AI engineers, developers  
 > Interface: CLI / Python library / MCP server / service
 <!-- DEVIN-ECO:END -->
 
