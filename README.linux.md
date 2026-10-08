@@ -36,6 +36,17 @@ Use the tool's documented `--data-dir` or `--config-dir` flags for non-default l
 - **Permissions:** tools read Devin data under `$XDG_DATA_HOME/devin` and write only their own config/state — no root or sudo is required.
 - **Scheduling:** optional recurring work belongs to `systemd --user` timers or cron; installation never creates jobs.
 
+## Recurring runs (optional)
+
+_Weekly knowledge extraction from recent sessions (proposed entries, human-approved)._
+
+```cron
+0 7 * * 0 devin-memory extract --latest
+```
+
+Equivalent `systemd --user` timer works too; enable lingering if it must run without a login session.
+
+
 ## Troubleshooting
 
 - If a command is not found, ensure the `uv` tools directory is on `PATH` and run `uv tool update-shell`.
