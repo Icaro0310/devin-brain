@@ -2,6 +2,9 @@
 
 ## Unreleased (F4)
 
+- **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
+  (track/nature/audience/interface rendered from the registry).
+
 - **CI** — `labeler.yml` is now a thin caller of the shared reusable workflow in `devin-powerups` (`@v1`); PR labeling behavior is unchanged.
 
 - **Install** — README now recommends `uv tool install 'devin-memory[mcp]'` (PyPI) as the primary route; `pipx` documented as alternative.
