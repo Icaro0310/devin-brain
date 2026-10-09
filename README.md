@@ -29,7 +29,7 @@
 <!-- DEVIN-WHERE:BEGIN -->
 ## Where this fits
 
-- **Job:** Control
+- **Job:** Build
 - **Product:** [`devin-brain`](https://github.com/Icaro0310/devin-brain)
 - **Packages:** `devin-memory`
 - **Mode:** mixed
