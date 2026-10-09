@@ -11,7 +11,7 @@
 ## Sensitive data handling
 
 - Output intended for sharing must pass through
-  [`devin-redact`](https://github.com/Icaro0310/devin-redact) before publication.
+  [`devin-redact`](https://github.com/Icaro0310/devin-state) before publication.
 - Never commit Devin session databases, `.env` files, tokens, or pairing codes.
 
 ## Reporting a vulnerability
