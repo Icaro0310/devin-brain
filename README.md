@@ -26,6 +26,16 @@
 > Path: AI engineers · step 3/3 — after `devin-orchestrator`
 <!-- DEVIN-ECO:END -->
 
+<!-- DEVIN-WHERE:BEGIN -->
+## Where this fits
+
+- **Job:** Control
+- **Product:** [`devin-brain`](https://github.com/Icaro0310/devin-brain)
+- **Packages:** `devin-memory`
+- **Mode:** mixed
+- **Foundation:** [`devin-internals-spec`](https://github.com/Icaro0310/devin-internals-spec)
+- **Ecosystem:** [`awesome-devin`](https://github.com/Icaro0310/awesome-devin) · registry: [`devin-powerups`](https://github.com/Icaro0310/devin-powerups)
+<!-- DEVIN-WHERE:END -->
 
 # devin-memory
 
