@@ -23,3 +23,7 @@ pytest
 - [ ] README sections *Prior art* and *Limitations* still accurate.
 - [ ] CHANGELOG updated (semver).
 - [ ] No secrets, tokens, or absolute user paths in code or docs.
+
+## Test policy
+
+New or changed functionality must include tests; PRs without coverage for new behavior are not merged.
