@@ -1,4 +1,4 @@
-# devin-memory — Corporate Windows guide
+# devin-brain — Corporate Windows guide
 
 This guide covers restricted Windows setup only. For unrestricted Windows, see [README.windows.md](README.windows.md); for features, shared commands, limitations, and the safety model, see [README.md](README.md).
 
@@ -44,7 +44,7 @@ Use the tool's documented `--data-dir` or `--config-dir` flags for non-default l
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved)._
 
 ```powershell
-schtasks /create /tn "devin-memory" /tr "devin-memory extract --latest" /sc daily /st 04:00 /f
+schtasks /create /tn "devin-brain" /tr "devin-memory extract --latest" /sc daily /st 04:00 /f
 ```
 
 User-scope `schtasks` needs no admin. If Group Policy disables Task Scheduler, run the command manually or use the tool's own `install` subcommand where available.
