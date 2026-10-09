@@ -2,9 +2,9 @@
 
 <img src="assets/banner.svg" alt="devin-memory" width="100%"/>
 
-<a href="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml"><img src="https://github.com/Icaro0310/devin-memory/actions/workflows/ci.yml/badge.svg" alt="ci"/></a>
+<a href="https://github.com/Icaro0310/devin-brain/actions/workflows/ci.yml"><img src="https://github.com/Icaro0310/devin-brain/actions/workflows/ci.yml/badge.svg" alt="ci"/></a>
 <a href="https://pypi.org/project/devin-memory/"><img src="https://img.shields.io/pypi/v/devin-memory" alt="PyPI"/></a>
-<a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-memory"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-memory/badge" alt="OpenSSF Scorecard"/></a>
+<a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-brain"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-brain/badge" alt="OpenSSF Scorecard"/></a>
 <a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx" alt="M8ven Score"/></a>
 <a href="https://glama.ai/mcp/servers/Icaro0310/devin-memory"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-memory/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://mcpservers.org/servers/icaro0310/devin-memory"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"/></a>
@@ -12,10 +12,10 @@
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"/></a>
 <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"/></a>
-<a href="https://github.com/Icaro0310/devin-memory"><img src="https://img.shields.io/github/stars/Icaro0310/devin-memory" alt="GitHub stars"/></a>
-<a href="https://github.com/Icaro0310/devin-memory/commits/main"><img src="https://img.shields.io/github/last-commit/Icaro0310/devin-memory" alt="Last commit"/></a>
+<a href="https://github.com/Icaro0310/devin-brain"><img src="https://img.shields.io/github/stars/Icaro0310/devin-memory" alt="GitHub stars"/></a>
+<a href="https://github.com/Icaro0310/devin-brain/commits/main"><img src="https://img.shields.io/github/last-commit/Icaro0310/devin-memory" alt="Last commit"/></a>
 <a href="https://github.com/Icaro0310/awesome-devin"><img src="https://img.shields.io/badge/part%20of-devin--*-ecosystem-7c3aed" alt="devin-* ecosystem"/></a>
-<a href="https://github.com/Icaro0310/devin-memory/issues"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"/></a>
+<a href="https://github.com/Icaro0310/devin-brain/issues"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs welcome"/></a>
 </div>
 
 <!-- DEVIN-ECO:BEGIN -->
@@ -28,6 +28,11 @@
 
 
 # devin-memory
+
+> **Renamed (Oct 2026):** this repository moved from `Icaro0310/devin-memory`
+> to `Icaro0310/devin-brain` — the PyPI package, CLI commands and MCP server
+> name stay `devin-memory`; stars, issues and history are preserved by the
+> GitHub redirect.
 
 > **Unofficial community project.** Not affiliated with, endorsed by, or
 > sponsored by Cognition AI. "Devin" is a trademark of Cognition AI.
