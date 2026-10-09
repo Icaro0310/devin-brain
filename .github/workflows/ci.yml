@@ -29,7 +29,7 @@ jobs:
         # sibling deps resolve from PyPI at release time; CI installs them
         # from git so main stays green before the packages are published
         run: |
-          pip install "devin-redact @ git+https://github.com/Icaro0310/devin-state.git" "devin-internals-spec @ git+https://github.com/Icaro0310/devin-internals-spec.git"
+          pip install "devin-redact @ git+https://github.com/Icaro0310/devin-state.git#subdirectory=packages/redact" "devin-internals-spec @ git+https://github.com/Icaro0310/devin-internals-spec.git"
           pip install -e ".[dev]" --no-deps
           pip install "pytest>=8"
 
