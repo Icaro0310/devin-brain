@@ -22,8 +22,8 @@ dependencies = ["devin-memory[mcp]>=0.3.0"]
 devin-memory-mcp = "devin_memory.mcp_server:main"
 
 [project.urls]
-Homepage = "https://github.com/Icaro0310/devin-memory"
-Repository = "https://github.com/Icaro0310/devin-memory"
+Homepage = "https://github.com/Icaro0310/devin-brain"
+Repository = "https://github.com/Icaro0310/devin-brain"
 
 [tool.setuptools]
 py-modules = []

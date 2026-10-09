@@ -4,7 +4,7 @@
   "description": "Anti-poisoning memory for agents: provenance, conflicts, quarantine gate.",
   "version": "0.3.0",
   "repository": {
-    "url": "https://github.com/Icaro0310/devin-memory",
+    "url": "https://github.com/Icaro0310/devin-brain",
     "source": "github"
   },
   "packages": [

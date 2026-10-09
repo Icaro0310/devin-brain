@@ -1,4 +1,4 @@
-# devin-memory — Personal Windows guide
+# devin-brain — Personal Windows guide
 
 This guide covers unrestricted Windows setup. For restricted machines, see [README.corporate-windows.md](README.corporate-windows.md); for features, shared commands, limitations, and the safety model, see [README.md](README.md).
 
@@ -40,7 +40,7 @@ Use the tool's documented `--data-dir` or `--config-dir` flags for non-default l
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved)._
 
 ```powershell
-schtasks /create /tn "devin-memory" /tr "devin-memory extract --latest" /sc daily /st 04:00 /f
+schtasks /create /tn "devin-brain" /tr "devin-memory extract --latest" /sc daily /st 04:00 /f
 ```
 
 Runs under your account — no admin needed. Adjust `/sc`/`/st` (or `/sc onlogon` for daemons) to taste.
