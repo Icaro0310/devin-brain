@@ -185,13 +185,13 @@ def _guarded(fn):
     return wrapper
 
 
-def build_server(read_only: bool = False):
-    """Build the MCP server. With ``read_only`` the review/mutation ops
-    (retract, supersede, quarantine, release, approve, extract) are not
-    registered — quarantined/proposed memory can only reach ``active``
-    through the human CLI, so an agent can never self-release unreviewed
-    memory. Plugin installs launch with this flag; the standalone server
-    keeps the full surface.
+def build_server(read_only: bool = True):
+    """Build the MCP server. The default ``read_only`` omits the
+    review/mutation ops (retract, supersede, quarantine, release,
+    approve, extract): quarantined/proposed memory can only reach
+    ``active`` through the human CLI, so an agent can never self-release
+    unreviewed memory. ``read_only=False`` restores the full surface —
+    deliberate, opt-in use only.
     """
     server = _make_app("devin-memory")
 
@@ -291,14 +291,19 @@ def main() -> None:
                         help="memory.db path (default: ./memory.db or "
                              "$DEVIN_MEMORY_DB)")
     parser.add_argument("--read-only", action="store_true",
-                        help="expose only the gated read/write surface — "
-                             "review ops (approve/retract/supersede/"
-                             "quarantine/release/extract) stay CLI-only")
+                        help="kept for compatibility — read-only is the "
+                             "default; review ops (approve/retract/"
+                             "supersede/quarantine/release/extract) "
+                             "stay CLI-only")
+    parser.add_argument("--allow-review-ops", action="store_true",
+                        help="opt-in: also register the review/mutation "
+                             "ops (retract/supersede/quarantine/release/"
+                             "approve/extract). Deliberate use only.")
     args = parser.parse_args()
     if args.db:
         _DB_PATH = args.db
     try:
-        build_server(read_only=args.read_only).run()
+        build_server(read_only=not args.allow_review_ops).run()
     except ImportError as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

@@ -180,13 +180,13 @@ Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `{"error", "detail"}` object — nothing raises through the transport.
 `DEVIN_MEMORY_DB` works as an alternative to `--db`.
 
-Pass `--read-only` to restrict the server to the gated read/write
-surface (`retain`, `recall`, `screen`, `list`, `conflicts`, `prime`,
-`verify`): the review ops (`retract`, `supersede`, `quarantine`,
-`release`, `approve`, `extract`) are then not registered at all, so an
-agent can never self-release quarantined or proposed memory — those
-remain CLI-only for a human. The `.devin-plugin` manifest launches the
-server with `--read-only`.
+The server defaults to the gated read/write surface (`retain`, `recall`,
+`screen`, `list`, `conflicts`, `prime`, `verify`): the review ops
+(`retract`, `supersede`, `quarantine`, `release`, `approve`, `extract`)
+are not registered at all, so an agent can never self-release
+quarantined or proposed memory — those remain CLI-only for a human.
+Pass `--allow-review-ops` to opt in to the full surface (`--read-only`
+is still accepted for compatibility and is already the default).
 
 ## Learn from sessions with `devin-learning`
 

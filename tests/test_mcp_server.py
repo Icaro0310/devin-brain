@@ -77,9 +77,9 @@ def test_prime_returns_bounded_text(db):
     assert "remember this for prime" in out["text"]
 
 
-def test_build_server_registers_tools():
-    mcp = pytest.importorskip("mcp")
-    server = mcp_srv.build_server()
+def test_build_server_full_surface_is_opt_in():
+    pytest.importorskip("mcp")
+    server = mcp_srv.build_server(read_only=False)
     manager = getattr(server, "_tool_manager", None)
     names = set(getattr(manager, "_tools", {}) or {})
     expected = {"retain", "recall", "screen", "list", "retract",
@@ -88,9 +88,12 @@ def test_build_server_registers_tools():
     assert expected <= names
 
 
-def test_build_server_read_only_hides_review_ops():
+def test_build_server_default_is_read_only():
+    """The default build hides review ops — mutation is opt-in, not
+    opt-out, so a client that just launches the server can never
+    self-release quarantined or proposed memory."""
     pytest.importorskip("mcp")
-    server = mcp_srv.build_server(read_only=True)
+    server = mcp_srv.build_server()
     manager = getattr(server, "_tool_manager", None)
     names = set(getattr(manager, "_tools", {}) or {})
     review_ops = {"retract", "supersede", "quarantine", "release",
