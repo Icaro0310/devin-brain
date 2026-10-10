@@ -33,10 +33,14 @@ you learned something durable (a decision, a gotcha, a convention).
   quarantine them anyway; do not try to bypass it.
 - Review operations are **not** part of this surface: `approve`,
   `retract`, `supersede`, `quarantine`, `release` and `extract` stay
-  CLI-only, for a human to run deliberately:
+  CLI-only, for a human to run deliberately (the plugin launches the
+  server with `--read-only`, so those tools are not even registered):
 
   ```bash
-  devin-memory review   # triage proposed/quarantined entries
+  devin-memory list --status proposed     # pending review
+  devin-memory list --status quarantined  # flagged by the gate
+  devin-memory approve <id>               # promote to active
+  devin-memory quarantine --release <id>  # human override back to active
   ```
 
 - Prefer `screen` before `retain` when unsure whether content is

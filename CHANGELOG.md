@@ -2,6 +2,11 @@
 
 ## Unreleased (F4)
 
+- **MCP** — `devin-memory-mcp --read-only` registers only the gated
+  read/write tools and omits the review ops (`retract`, `supersede`,
+  `quarantine`, `release`, `approve`, `extract`); the `.devin-plugin`
+  manifest launches with the flag so quarantined/proposed memory can
+  only reach `active` via the human CLI.
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
 - **Docs** — ecosystem journey recuration recorded (six curated audiences; this product's ai-engineers and data-scientists paths were already regenerated).
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block

@@ -51,7 +51,10 @@ def test_skill_offers_no_review_tools():
 def test_skill_documents_cli_only_review():
     body = SKILL.read_text(encoding="utf-8").lower()
     assert "cli-only" in body
-    assert "devin-memory review" in body
+    # review commands must be real CLI subcommands — `devin-memory
+    # review` does not exist (finding: skill advertised it)
+    assert "devin-memory list --status" in body
+    assert "devin-memory approve" in body
 
 
 def test_plugin_manifest_self_consistent():

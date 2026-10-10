@@ -9,7 +9,7 @@
   "mcpServers": {
     "devin-brain": {
       "command": "uvx",
-      "args": ["--from", "devin-memory[mcp]", "devin-memory-mcp"]
+      "args": ["--from", "devin-memory[mcp]", "devin-memory-mcp", "--read-only"]
     }
   }
 }

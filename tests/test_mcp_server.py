@@ -86,3 +86,15 @@ def test_build_server_registers_tools():
                 "supersede", "quarantine", "release", "approve",
                 "conflicts", "prime", "verify", "extract"}
     assert expected <= names
+
+
+def test_build_server_read_only_hides_review_ops():
+    pytest.importorskip("mcp")
+    server = mcp_srv.build_server(read_only=True)
+    manager = getattr(server, "_tool_manager", None)
+    names = set(getattr(manager, "_tools", {}) or {})
+    review_ops = {"retract", "supersede", "quarantine", "release",
+                  "approve", "extract"}
+    assert not review_ops & names
+    assert {"retain", "recall", "screen", "list", "conflicts",
+            "prime", "verify"} <= names
