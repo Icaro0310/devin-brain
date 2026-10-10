@@ -185,7 +185,14 @@ def _guarded(fn):
     return wrapper
 
 
-def build_server():
+def build_server(read_only: bool = True):
+    """Build the MCP server. The default ``read_only`` omits the
+    review/mutation ops (retract, supersede, quarantine, release,
+    approve, extract): quarantined/proposed memory can only reach
+    ``active`` through the human CLI, so an agent can never self-release
+    unreviewed memory. ``read_only=False`` restores the full surface —
+    deliberate, opt-in use only.
+    """
     server = _make_app("devin-memory")
 
     @server.tool()
@@ -216,30 +223,32 @@ def build_server():
         quarantined, retracted)."""
         return _guarded(do_list)(status, limit)
 
-    @server.tool()
-    def retract(entry_id: int) -> dict:
-        """Withdraw an entry — kept for history, never recalled again."""
-        return _guarded(do_retract)(entry_id)
+    if not read_only:
 
-    @server.tool()
-    def supersede(entry_id: int, content: str, tags: str = "") -> dict:
-        """Replace an entry with a corrected version (versioned)."""
-        return _guarded(do_supersede)(entry_id, content, tags)
+        @server.tool()
+        def retract(entry_id: int) -> dict:
+            """Withdraw an entry — kept for history, never recalled."""
+            return _guarded(do_retract)(entry_id)
 
-    @server.tool()
-    def quarantine(entry_id: int, reason: str = "") -> dict:
-        """Move an entry to the quarantine lane (review hold)."""
-        return _guarded(do_quarantine)(entry_id, reason)
+        @server.tool()
+        def supersede(entry_id: int, content: str, tags: str = "") -> dict:
+            """Replace an entry with a corrected version (versioned)."""
+            return _guarded(do_supersede)(entry_id, content, tags)
 
-    @server.tool()
-    def release(entry_id: int) -> dict:
-        """Human override: move a quarantined entry back to active."""
-        return _guarded(do_release)(entry_id)
+        @server.tool()
+        def quarantine(entry_id: int, reason: str = "") -> dict:
+            """Move an entry to the quarantine lane (review hold)."""
+            return _guarded(do_quarantine)(entry_id, reason)
 
-    @server.tool()
-    def approve(entry_id: int) -> dict:
-        """Promote a proposed extraction to active memory."""
-        return _guarded(do_approve)(entry_id)
+        @server.tool()
+        def release(entry_id: int) -> dict:
+            """Human override: move a quarantined entry back to active."""
+            return _guarded(do_release)(entry_id)
+
+        @server.tool()
+        def approve(entry_id: int) -> dict:
+            """Promote a proposed extraction to active memory."""
+            return _guarded(do_approve)(entry_id)
 
     @server.tool()
     def conflicts() -> list[dict]:
@@ -258,13 +267,16 @@ def build_server():
         (read-only)."""
         return _guarded(do_verify)(entry_id, sessions_db)
 
-    @server.tool()
-    def extract(sessions_db: str, session_id: str = "",
-                latest: bool = False, auto_approve: bool = False) -> dict:
-        """Mine a Devin session (read-only sessions.db) for durable
-        knowledge -> proposed entries awaiting approve."""
-        return _guarded(do_extract)(
-            sessions_db, session_id, latest, auto_approve)
+    if not read_only:
+
+        @server.tool()
+        def extract(sessions_db: str, session_id: str = "",
+                    latest: bool = False, auto_approve: bool = False
+                    ) -> dict:
+            """Mine a Devin session (read-only sessions.db) for durable
+            knowledge -> proposed entries awaiting approve."""
+            return _guarded(do_extract)(
+                sessions_db, session_id, latest, auto_approve)
 
     return server
 
@@ -278,11 +290,26 @@ def main() -> None:
     parser.add_argument("--db", metavar="PATH",
                         help="memory.db path (default: ./memory.db or "
                              "$DEVIN_MEMORY_DB)")
+    parser.add_argument("--read-only", action="store_true",
+                        help="kept for compatibility — read-only is the "
+                             "default; review ops (approve/retract/"
+                             "supersede/quarantine/release/extract) "
+                             "stay CLI-only")
+    parser.add_argument("--allow-review-ops", action="store_true",
+                        help="opt-in: also register the review/mutation "
+                             "ops (retract/supersede/quarantine/release/"
+                             "approve/extract). Deliberate use only.")
     args = parser.parse_args()
     if args.db:
         _DB_PATH = args.db
+    # An explicit --read-only wins over --allow-review-ops: ambiguous
+    # invocations resolve to the restrictive surface.
+    read_only = args.read_only or not args.allow_review_ops
+    if args.read_only and args.allow_review_ops:
+        print("note: --read-only wins over --allow-review-ops; review ops "
+              "stay unregistered", file=sys.stderr)
     try:
-        build_server().run()
+        build_server(read_only=read_only).run()
     except ImportError as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

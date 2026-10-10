@@ -77,12 +77,61 @@ def test_prime_returns_bounded_text(db):
     assert "remember this for prime" in out["text"]
 
 
-def test_build_server_registers_tools():
-    mcp = pytest.importorskip("mcp")
-    server = mcp_srv.build_server()
+def test_build_server_full_surface_is_opt_in():
+    pytest.importorskip("mcp")
+    server = mcp_srv.build_server(read_only=False)
     manager = getattr(server, "_tool_manager", None)
     names = set(getattr(manager, "_tools", {}) or {})
     expected = {"retain", "recall", "screen", "list", "retract",
                 "supersede", "quarantine", "release", "approve",
                 "conflicts", "prime", "verify", "extract"}
     assert expected <= names
+
+
+def test_build_server_default_is_read_only():
+    """The default build hides review ops — mutation is opt-in, not
+    opt-out, so a client that just launches the server can never
+    self-release quarantined or proposed memory."""
+    pytest.importorskip("mcp")
+    server = mcp_srv.build_server()
+    manager = getattr(server, "_tool_manager", None)
+    names = set(getattr(manager, "_tools", {}) or {})
+    review_ops = {"retract", "supersede", "quarantine", "release",
+                  "approve", "extract"}
+    assert not review_ops & names
+    assert {"retain", "recall", "screen", "list", "conflicts",
+            "prime", "verify"} <= names
+
+
+def _capture_build_server(monkeypatch):
+    captured = {}
+
+    class _FakeServer:
+        def run(self):
+            pass
+
+    def _fake_build(read_only=True):
+        captured["read_only"] = read_only
+        return _FakeServer()
+
+    monkeypatch.setattr(mcp_srv, "build_server", _fake_build)
+    return captured
+
+
+def test_main_read_only_wins_over_allow_review_ops(monkeypatch):
+    """An explicit --read-only combined with --allow-review-ops resolves
+    to the restrictive surface, not the full one."""
+    captured = _capture_build_server(monkeypatch)
+    monkeypatch.setattr(
+        sys, "argv",
+        ["devin-memory-mcp", "--read-only", "--allow-review-ops"])
+    mcp_srv.main()
+    assert captured["read_only"] is True
+
+
+def test_main_allow_review_ops_alone_opens_surface(monkeypatch):
+    captured = _capture_build_server(monkeypatch)
+    monkeypatch.setattr(
+        sys, "argv", ["devin-memory-mcp", "--allow-review-ops"])
+    mcp_srv.main()
+    assert captured["read_only"] is False
