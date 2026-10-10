@@ -45,6 +45,11 @@
 
 - **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
 
+## 0.3.0
+
+- **Fix** — `devin_memory.__version__` now reports the package version (was stale at `0.1.0` while `pyproject.toml` declared `0.3.0`); drives `devin-learning --version` and report metadata.
+- **CI** — the PyPI publish workflow now verifies the built wheel's self-reported `__version__` against `pyproject.toml` before upload (installed with `--no-deps`, so workspace siblings not yet on PyPI cannot block a valid wheel).
+
 ## 0.2.0
 
 - Absorbed the `devin-learning` project: extract/report/review/skills now
