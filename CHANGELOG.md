@@ -3,7 +3,7 @@
 ## Unreleased (F4)
 
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
-- **Docs** — ecosystem journey recuration recorded (six curated audiences; this product's ai-engineers and data-scientists paths were already regenerated).
+- **Docs** — ecosystem journey recuration recorded (six curated audiences); v2 zero-repeats keeps only this product's AI engineers path — Data Scientists moved to the devin-graph → devin-search → devin-history → devin-metrics chain.
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
   (track/nature/audience/interface rendered from the registry).
 
