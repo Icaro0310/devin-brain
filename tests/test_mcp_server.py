@@ -103,19 +103,25 @@ def test_build_server_default_is_read_only():
             "prime", "verify"} <= names
 
 
-def test_main_read_only_wins_over_allow_review_ops(monkeypatch):
-    """An explicit --read-only combined with --allow-review-ops resolves
-    to the restrictive surface, not the full one."""
+def _capture_build_server(monkeypatch):
     captured = {}
 
     class _FakeServer:
         def run(self):
             pass
 
-    monkeypatch.setattr(
-        mcp_srv, "build_server",
-        lambda read_only=True: captured.setdefault(
-            "read_only", read_only) or _FakeServer())
+    def _fake_build(read_only=True):
+        captured["read_only"] = read_only
+        return _FakeServer()
+
+    monkeypatch.setattr(mcp_srv, "build_server", _fake_build)
+    return captured
+
+
+def test_main_read_only_wins_over_allow_review_ops(monkeypatch):
+    """An explicit --read-only combined with --allow-review-ops resolves
+    to the restrictive surface, not the full one."""
+    captured = _capture_build_server(monkeypatch)
     monkeypatch.setattr(
         sys, "argv",
         ["devin-memory-mcp", "--read-only", "--allow-review-ops"])
@@ -124,16 +130,7 @@ def test_main_read_only_wins_over_allow_review_ops(monkeypatch):
 
 
 def test_main_allow_review_ops_alone_opens_surface(monkeypatch):
-    captured = {}
-
-    class _FakeServer:
-        def run(self):
-            pass
-
-    monkeypatch.setattr(
-        mcp_srv, "build_server",
-        lambda read_only=True: captured.setdefault(
-            "read_only", read_only) or _FakeServer())
+    captured = _capture_build_server(monkeypatch)
     monkeypatch.setattr(
         sys, "argv", ["devin-memory-mcp", "--allow-review-ops"])
     mcp_srv.main()
