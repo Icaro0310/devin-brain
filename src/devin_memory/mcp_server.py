@@ -302,8 +302,14 @@ def main() -> None:
     args = parser.parse_args()
     if args.db:
         _DB_PATH = args.db
+    # An explicit --read-only wins over --allow-review-ops: ambiguous
+    # invocations resolve to the restrictive surface.
+    read_only = args.read_only or not args.allow_review_ops
+    if args.read_only and args.allow_review_ops:
+        print("note: --read-only wins over --allow-review-ops; review ops "
+              "stay unregistered", file=sys.stderr)
     try:
-        build_server(read_only=not args.allow_review_ops).run()
+        build_server(read_only=read_only).run()
     except ImportError as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

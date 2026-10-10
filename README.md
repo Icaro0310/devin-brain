@@ -186,7 +186,18 @@ The server defaults to the gated read/write surface (`retain`, `recall`,
 are not registered at all, so an agent can never self-release
 quarantined or proposed memory — those remain CLI-only for a human.
 Pass `--allow-review-ops` to opt in to the full surface (`--read-only`
-is still accepted for compatibility and is already the default).
+is still accepted for compatibility, is already the default, and wins
+over `--allow-review-ops` when both are passed).
+
+`adapters/` is a self-contained Devin plugin root
+(`adapters/.devin-plugin/plugin.json` + `adapters/skills/devin-brain/SKILL.md`),
+installed with
+`devin plugins install Icaro0310/devin-brain#adapters` — it ships in the
+repo, not inside the wheel. The manifest launches the server through
+`uvx --from 'devin-memory[mcp]' devin-memory-mcp --read-only`, which
+resolves once the first PyPI release ships; until then run a
+source-installed `devin-memory-mcp` directly or point a local manifest
+copy at the checkout (`uvx --from '.[mcp]' devin-memory-mcp`).
 
 ## Learn from sessions with `devin-learning`
 
