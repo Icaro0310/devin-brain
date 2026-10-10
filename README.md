@@ -23,8 +23,7 @@
 > Track: Build · Nature: product  
 > For: AI engineers, Developers, Data Scientists  
 > Interface: CLI / Python library / MCP server / Service  
-> Path: AI engineers · step 3/3 — after `devin-orchestrator`  
-> Path: Data Scientists · step 1/3 — before `devin-explore`
+> Path: AI engineers · step 3/3 — after `devin-orchestrator`
 <!-- DEVIN-ECO:END -->
 
 <!-- DEVIN-WHERE:BEGIN -->
