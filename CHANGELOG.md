@@ -2,6 +2,7 @@
 
 ## Unreleased (F4)
 
+- **Docs** — ecosystem journey recuration recorded (six curated audiences; this product's ai-engineers and data-scientists paths were already regenerated).
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
   (track/nature/audience/interface rendered from the registry).
 
