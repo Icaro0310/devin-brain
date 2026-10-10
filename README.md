@@ -20,10 +20,11 @@
 
 <!-- DEVIN-ECO:BEGIN -->
 > **Part of the [DEVIN ecosystem](https://github.com/Icaro0310/awesome-devin)**  
-> Track: Control · Nature: product  
-> For: AI engineers, Developers  
+> Track: Build · Nature: product  
+> For: AI engineers, Developers, Data Scientists  
 > Interface: CLI / Python library / MCP server / Service  
-> Path: AI engineers · step 3/3 — after `devin-orchestrator`
+> Path: AI engineers · step 3/3 — after `devin-orchestrator`  
+> Path: Data Scientists · step 1/3 — before `devin-explore`
 <!-- DEVIN-ECO:END -->
 
 <!-- DEVIN-WHERE:BEGIN -->
