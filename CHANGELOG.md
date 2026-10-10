@@ -2,6 +2,7 @@
 
 ## Unreleased (F4)
 
+- **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
   (track/nature/audience/interface rendered from the registry).
 
