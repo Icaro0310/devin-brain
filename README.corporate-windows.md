@@ -60,8 +60,14 @@ Zscaler é comum em ambientes corporativos e se comporta diferente de um proxy g
 
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
+Save this as `%USERPROFILE%\devin-tasks\devin-brain.cmd` (quoting works normally inside a `.cmd` file):
+
+```batch
+devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"
+```
+
 ```powershell
-schtasks /create /tn "devin-brain" /tr 'devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"' /sc weekly /d SUN /st 07:00 /f
+schtasks /create /tn "devin-brain" /tr "%USERPROFILE%\devin-tasks\devin-brain.cmd" /sc weekly /d SUN /st 07:00 /f
 ```
 
 User-scope `schtasks` needs no admin. If Group Policy disables Task Scheduler (`0x80070005` "Access is denied"), run the command manually or use the tool's own `install` subcommand where available. Options needing elevation, "Run whether user is logged on or not", highest privileges, are usually policy-blocked; when they are, a user-scope logon trigger (`/sc onlogon`) is the realistic fallback.
