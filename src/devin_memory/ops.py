@@ -11,7 +11,9 @@ entries, so a poisoned fact cannot leak back into an agent's context.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -20,7 +22,11 @@ from devin_internals.parsers import SessionsStore
 from devin_memory import identity
 from devin_memory.conflict import is_conflict
 from devin_memory.extract import signals_from_nodes
-from devin_memory.screen import screen
+from devin_memory.screen import (
+    INJECTION_PATTERNS,
+    SECRET_PATTERNS,
+    screen,
+)
 from devin_memory.store import Entry, MemoryStore
 
 
@@ -488,19 +494,34 @@ def prime(
 # quarantine digest (audit)
 # ---------------------------------------------------------------------------
 
-# Reason families whose ``family:name`` strings are a closed taxonomy
-# (screen.py) — safe to report verbatim. ``manual:*`` and anything else are
-# free-form (a user can pass any --reason), so they are aggregated, never
-# echoed.
+# Reason strings the audit digest may report verbatim — the closed
+# ``family:name`` taxonomy emitted by :func:`screen`. Anything else is
+# free-form: ``--reason`` accepts arbitrary text, including a spoofed
+# family prefix like ``secret:<password>``, so unknown members bucket as
+# ``<family>:other`` and never echo their payload. Screen reasons added
+# later fail closed the same way — under-detailed, never leaky.
+_AUDIT_KNOWN_REASONS = frozenset(
+    [f"secret:{name}" for name in SECRET_PATTERNS]
+    + [f"injection:{name}" for name in INJECTION_PATTERNS]
+    + [
+        "limit:content_too_large",
+        "limit:too_many_tags",
+        "shape:bad_tag",
+        "shape:nul_byte",
+        "shape:long_base64_run",
+    ]
+)
 _AUDIT_REASON_FAMILIES = ("secret", "injection", "limit", "shape")
 
 
 def _reason_audit_key(reason: str) -> str:
-    family = reason.split(":", 1)[0]
-    if family in _AUDIT_REASON_FAMILIES:
+    if reason in _AUDIT_KNOWN_REASONS:
         return reason
+    family = reason.split(":", 1)[0]
     if family == "manual":
         return "manual:*"
+    if family in _AUDIT_REASON_FAMILIES:
+        return f"{family}:other"
     return "other"
 
 
@@ -512,7 +533,10 @@ def _entry_fingerprint(entry: Entry) -> str:
     """Content-keyed fingerprint of one entry — no ids, so two machines
     holding the same quarantined fact produce the same print."""
     content_sha = _sha256_hex(entry.content)
-    reasons_sha = _sha256_hex("\n".join(sorted(entry.quarantine_reasons)))
+    # A JSON array is length-delimited: a separator inside a free-form
+    # reason can't alias two different reason lists into one hash the
+    # way a plain "\n".join can.
+    reasons_sha = _sha256_hex(json.dumps(sorted(entry.quarantine_reasons)))
     return _sha256_hex(f"{content_sha}:{reasons_sha}")
 
 
@@ -520,7 +544,8 @@ def quarantine_digest(store: MemoryStore) -> dict[str, Any]:
     """Deterministic audit digest of the quarantine lane (read-only).
 
     ``digest`` is sha256 over the sorted per-entry fingerprints — each
-    fingerprint is sha256 of ``sha256(content) : sha256(sorted reasons)``.
+    fingerprint is sha256 of ``sha256(content) : sha256(JSON of sorted
+    reasons)`` — the JSON array keeps reason boundaries unambiguous.
     Because prints key on content (not row ids), two stores holding the same
     quarantined entries produce the same digest regardless of insertion
     order, and any membership or reason change moves the digest. An empty
@@ -565,17 +590,23 @@ def _db_file_bytes(store: MemoryStore) -> int | None:
 
 
 def _dedup_groups(entries: list[Entry]) -> list[list[Entry]]:
-    """Groups of ≥2 non-retracted entries sharing (content, workspace).
+    """Groups of ≥2 non-retracted entries sharing (content, workspace,
+    profile).
 
     ``retracted`` rows are history, not duplicates — a withdrawn fact
     re-retained later is a distinct event, so they never join a group.
-    ``workspace`` is compared raw: dedup never crosses scope boundaries.
+    ``workspace`` and ``profile`` are compared raw: dedup never crosses
+    scope boundaries, and ``prime`` only surfaces entries matching the
+    current profile, so merging across profiles could retract the only
+    copy a profile still sees.
     """
-    by_key: dict[tuple[str, str | None], list[Entry]] = {}
+    by_key: dict[tuple[str, str | None, str | None], list[Entry]] = {}
     for entry in entries:
         if entry.status == "retracted":
             continue
-        by_key.setdefault((entry.content, entry.workspace), []).append(entry)
+        by_key.setdefault(
+            (entry.content, entry.workspace, entry.profile), []
+        ).append(entry)
     return [members for members in by_key.values() if len(members) > 1]
 
 
@@ -586,19 +617,74 @@ def _dedup_survivor(members: list[Entry]) -> Entry:
     )
 
 
+def _group_report(survivor: Entry, members: list[Entry]) -> dict[str, Any]:
+    """Report view of one duplicate group — ids and a truncated content
+    hash only, never the content itself."""
+    return {
+        "keep_id": survivor.id,
+        "status": survivor.status,
+        "drop_ids": [e.id for e in members if e.id != survivor.id],
+        "content_sha256": _sha256_hex(members[0].content)[:12],
+        "workspace": survivor.workspace,
+    }
+
+
+def _apply_dedup(store: MemoryStore) -> list[dict[str, Any]]:
+    """Re-plan and execute dedup; the caller holds the write transaction.
+
+    Groups are recomputed from fresh state under the lock, so a retraction
+    (or a new copy) committed between the dry-run plan and ``--apply``
+    cannot leave dedup retracting the last live version of a fact.
+    """
+    applied: list[dict[str, Any]] = []
+    for members in _dedup_groups(store.entries()):
+        members = sorted(members, key=lambda e: e.id)
+        survivor = _dedup_survivor(members)
+        drops = [e for e in members if e.id != survivor.id]
+        merged_tags = _norm_tags(
+            [*survivor.tags, *(t for d in drops for t in d.tags)]
+        )
+        if merged_tags != list(survivor.tags):
+            store.set_tags(survivor.id, merged_tags)
+        if survivor.status == "quarantined":
+            merged_reasons: dict[str, None] = {}
+            for reason in [
+                *survivor.quarantine_reasons,
+                *(r for d in drops for r in d.quarantine_reasons),
+            ]:
+                merged_reasons.setdefault(reason)
+            if list(merged_reasons) != list(survivor.quarantine_reasons):
+                store.set_quarantine_reasons(
+                    survivor.id, list(merged_reasons)
+                )
+        for drop in drops:
+            store.set_status(drop.id, "retracted")
+        applied.append(_group_report(survivor, members))
+    applied.sort(key=lambda g: g["keep_id"])
+    return applied
+
+
 def compact(store: MemoryStore, *, apply: bool = False) -> dict[str, Any]:
     """Deduplicate the store; dry-run by default, mutates only with ``apply``.
 
-    A duplicate group is ≥2 non-retracted entries with identical ``content``
-    and ``workspace``. The survivor is the entry with the liveliest status
-    (``active`` > ``proposed`` > ``quarantined``), ties broken by lowest id;
-    every other copy becomes ``retracted`` — rows are never deleted, so
-    provenance and reasons stay auditable on the retracted rows. The
-    survivor inherits the union of the group's tags (recall surface) and,
-    when quarantined, the union of quarantine reasons (review accuracy).
+    A duplicate group is ≥2 non-retracted entries with identical
+    ``content``, ``workspace`` and ``profile``. The survivor is the entry
+    with the liveliest status (``active`` > ``proposed`` >
+    ``quarantined``), ties broken by lowest id; every other copy becomes
+    ``retracted`` — rows are never deleted, so provenance and reasons
+    stay auditable on the retracted rows. The survivor inherits the union
+    of the group's tags (recall surface) and, when quarantined, the union
+    of quarantine reasons (review accuracy).
 
-    With ``apply=True`` the plan is executed and the file ``VACUUM``ed —
-    the only byte savings available, since dedup itself deletes nothing.
+    With ``apply=True`` the dedup re-plans and executes inside a single
+    write transaction — either every group merges or none does, and a
+    concurrent retraction cannot trick dedup into removing the last live
+    copy. ``VACUUM`` then runs after the commit (SQLite forbids it inside
+    a transaction) — the only byte savings available, since dedup itself
+    deletes nothing. A vacuum failure is reported via
+    ``vacuumed``/``vacuum_error`` without masking the committed dedup,
+    and in apply mode ``groups`` reflects what was actually merged, which
+    can differ from the dry-run plan if the store changed in between.
     The report never prints content; groups are identified by
     ``keep_id``/``drop_ids`` and a truncated content sha256.
     """
@@ -607,16 +693,7 @@ def compact(store: MemoryStore, *, apply: bool = False) -> dict[str, Any]:
     groups: list[dict[str, Any]] = []
     for members in _dedup_groups(entries):
         members = sorted(members, key=lambda e: e.id)
-        survivor = _dedup_survivor(members)
-        groups.append(
-            {
-                "keep_id": survivor.id,
-                "status": survivor.status,
-                "drop_ids": [e.id for e in members if e.id != survivor.id],
-                "content_sha256": _sha256_hex(members[0].content)[:12],
-                "workspace": survivor.workspace,
-            }
-        )
+        groups.append(_group_report(_dedup_survivor(members), members))
     groups.sort(key=lambda g: g["keep_id"])
     dropped = sum(len(g["drop_ids"]) for g in groups)
     report: dict[str, Any] = {
@@ -630,50 +707,25 @@ def compact(store: MemoryStore, *, apply: bool = False) -> dict[str, Any]:
         "db_bytes_before": _db_file_bytes(store),
         "freelist_bytes": store.freelist_bytes(),
         "db_bytes_after": None,
+        "vacuumed": False,
+        "vacuum_error": None,
     }
     if not apply:
         return report
 
-    for group, members in zip(groups, _group_members(store, groups)):
-        survivor = members[group["keep_id"]]
-        drops = [members[i] for i in group["drop_ids"]]
-        merged_tags = _norm_tags(
-            [*survivor.tags, *(t for d in drops for t in d.tags)]
-        )
-        if merged_tags != list(survivor.tags):
-            store.set_tags(survivor.id, merged_tags)
-        if survivor.status == "quarantined":
-            merged_reasons = [
-                *survivor.quarantine_reasons,
-                *(r for d in drops for r in d.quarantine_reasons),
-            ]
-            seen: dict[str, None] = {}
-            for reason in merged_reasons:
-                seen.setdefault(reason)
-            if list(seen) != list(survivor.quarantine_reasons):
-                store.set_quarantine_reasons(survivor.id, list(seen))
-        for drop in drops:
-            store.set_status(drop.id, "retracted")
-    store.vacuum()
-
+    with store.transaction():
+        report["groups"] = _apply_dedup(store)
+    report["duplicate_groups"] = len(report["groups"])
+    report["duplicate_entries"] = sum(
+        len(g["drop_ids"]) for g in report["groups"]
+    )
     report["entries_live_after"] = len(
         [e for e in store.entries() if e.status != "retracted"]
     )
+    try:
+        store.vacuum()
+        report["vacuumed"] = True
+    except sqlite3.Error as exc:
+        report["vacuum_error"] = str(exc)
     report["db_bytes_after"] = _db_file_bytes(store)
     return report
-
-
-def _group_members(
-    store: MemoryStore, groups: list[dict[str, Any]]
-) -> list[dict[int, Entry]]:
-    """Reload the entries named by a plan, keyed by id (fresh state)."""
-    out: list[dict[int, Entry]] = []
-    for group in groups:
-        members = {}
-        for entry_id in [group["keep_id"], *group["drop_ids"]]:
-            entry = store.get(entry_id)
-            if entry is None:
-                raise EntryNotFoundError(f"no entry with id {entry_id}")
-            members[entry_id] = entry
-        out.append(members)
-    return out

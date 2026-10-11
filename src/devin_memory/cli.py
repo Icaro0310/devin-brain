@@ -327,37 +327,50 @@ def cmd_compact(args: argparse.Namespace) -> int:
         report = ops.compact(store, apply=args.apply)
     if args.json:
         _print_json(report)
-        return 0
-    mode = "dry-run" if report["dry_run"] else "applied"
-    print(
-        f"compact ({mode}): {report['entries_live']} live entries"
-        f" -> {report['entries_live_after']}"
-        f" ({report['duplicate_entries']} duplicates in"
-        f" {report['duplicate_groups']} groups;"
-        f" {report['entries_total']} rows total)"
-    )
-    if report["groups"]:
-        rows = [
-            [
-                str(g["keep_id"]),
-                g["status"],
-                ",".join(str(i) for i in g["drop_ids"]),
-                g["content_sha256"],
+    else:
+        mode = "dry-run" if report["dry_run"] else "applied"
+        print(
+            f"compact ({mode}): {report['entries_live']} live entries"
+            f" -> {report['entries_live_after']}"
+            f" ({report['duplicate_entries']} duplicates in"
+            f" {report['duplicate_groups']} groups;"
+            f" {report['entries_total']} rows total)"
+        )
+        if report["groups"]:
+            rows = [
+                [
+                    str(g["keep_id"]),
+                    g["status"],
+                    ",".join(str(i) for i in g["drop_ids"]),
+                    g["content_sha256"],
+                ]
+                for g in report["groups"]
             ]
-            for g in report["groups"]
-        ]
-        print(_fmt_table(["KEEP", "STATUS", "RETRACTED", "CONTENT_SHA256"], rows))
-    before = report["db_bytes_before"]
-    if before is not None:
-        if report["dry_run"]:
             print(
-                f"db: {before} bytes"
-                f" ({report['freelist_bytes']} B reclaimable by vacuum)"
+                _fmt_table(
+                    ["KEEP", "STATUS", "RETRACTED", "CONTENT_SHA256"], rows
+                )
             )
-        else:
-            print(f"db: {before} -> {report['db_bytes_after']} bytes")
-    if report["dry_run"]:
-        print("dry-run — re-run with --apply to compact")
+        before = report["db_bytes_before"]
+        if before is not None:
+            if report["dry_run"]:
+                print(
+                    f"db: {before} bytes"
+                    f" ({report['freelist_bytes']} B reclaimable by vacuum)"
+                )
+            else:
+                print(f"db: {before} -> {report['db_bytes_after']} bytes")
+        if report["dry_run"]:
+            print("dry-run — re-run with --apply to compact")
+    if report["vacuum_error"]:
+        # dedup committed; only the maintenance pass failed — say so
+        # rather than reporting the whole command as failed.
+        print(
+            "warning: dedup applied but vacuum failed:"
+            f" {report['vacuum_error']}",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

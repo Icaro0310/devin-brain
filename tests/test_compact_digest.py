@@ -1,9 +1,9 @@
 """``compact`` (dedup + vacuum) and ``quarantine --digest`` (audit hash).
 
-Pin the semantics: dedup groups on exact (content, workspace) among
-non-retracted rows, keeps the liveliest-then-oldest copy, retracts the
-rest — never deletes. The digest keys on content fingerprints (not row
-ids) so it is stable across runs and machines and moves on any
+Pin the semantics: dedup groups on exact (content, workspace, profile)
+among non-retracted rows, keeps the liveliest-then-oldest copy, retracts
+the rest — never deletes. The digest keys on content fingerprints (not
+row ids) so it is stable across runs and machines and moves on any
 membership/reason change. Reports carry no content.
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 
 import pytest
 
@@ -98,6 +99,19 @@ def test_compact_retracted_rows_do_not_group(store):
     assert store.get(new.id).status == "active"
 
 
+def test_compact_keeps_one_copy_per_profile(store):
+    """prime() filters by profile — merging across profiles would retract
+    the only copy the other profile's context still sees."""
+    corp = ops.retain(store, CLEAN_FACT, profile="corporate")
+    pers = ops.retain(store, CLEAN_FACT, profile="personal")
+    report = ops.compact(store, apply=True)
+    assert report["duplicate_groups"] == 0
+    assert store.get(corp.id).status == "active"
+    assert store.get(pers.id).status == "active"
+    assert CLEAN_FACT in ops.prime(store, profile="corporate")
+    assert CLEAN_FACT in ops.prime(store, profile="personal")
+
+
 # ---------------------------------------------------------------------------
 # compact — dry-run vs apply
 # ---------------------------------------------------------------------------
@@ -147,9 +161,79 @@ def test_compact_apply_vacuums_file(tmp_path):
         for _ in range(3):
             ops.retain(s, CLEAN_FACT)
         report = ops.compact(s, apply=True)
+        assert report["vacuumed"] is True
+        assert report["vacuum_error"] is None
         assert report["db_bytes_after"] is not None
         assert report["db_bytes_after"] <= report["db_bytes_before"]
         assert report["db_bytes_after"] == db.stat().st_size
+
+
+def test_compact_apply_replans_when_survivor_retracted(store):
+    """A retraction committed between plan and apply must not make dedup
+    remove the last live copy — apply re-plans under the write lock."""
+    a = ops.retain(store, CLEAN_FACT)
+    b = ops.retain(store, CLEAN_FACT)
+    ops.retain(store, CLEAN_FACT)
+    plan = ops.compact(store)
+    assert plan["groups"][0]["keep_id"] == a.id
+    ops.retract(store, a.id)  # planned survivor disappears mid-flight
+    report = ops.compact(store, apply=True)
+    assert report["groups"][0]["keep_id"] == b.id
+    statuses = {e.id: e.status for e in store.entries()}
+    assert statuses[a.id] == "retracted"
+    assert statuses[b.id] == "active"  # fact still recallable
+    live = [e for e in store.entries() if e.status != "retracted"]
+    assert [e.id for e in live] == [b.id]
+
+
+def test_compact_apply_never_retracts_last_live_copy(store):
+    ops.retain(store, CLEAN_FACT)
+    b = ops.retain(store, CLEAN_FACT)
+    plan = ops.compact(store)
+    ops.retract(store, plan["groups"][0]["keep_id"])
+    report = ops.compact(store, apply=True)
+    assert report["duplicate_entries"] == 0  # nothing left to merge
+    assert store.get(b.id).status == "active"
+
+
+def test_compact_apply_rolls_back_all_groups_on_failure(store, monkeypatch):
+    """Dedup is one transaction: a mid-apply failure commits nothing."""
+    ops.retain(store, CLEAN_FACT)
+    ops.retain(store, CLEAN_FACT)
+    ops.retain(store, CLEAN_FACT_2)
+    ops.retain(store, CLEAN_FACT_2)
+    real_set_status = store.set_status
+    calls = 0
+
+    def flaky(entry_id, status):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise sqlite3.OperationalError("simulated write failure")
+        real_set_status(entry_id, status)
+
+    monkeypatch.setattr(store, "set_status", flaky)
+    with pytest.raises(sqlite3.OperationalError):
+        ops.compact(store, apply=True)
+    assert all(e.status == "active" for e in store.entries())
+
+
+def test_compact_apply_reports_vacuum_failure(store, monkeypatch):
+    """Vacuum runs after the dedup commit; its failure is reported
+    without masking the dedup that did happen."""
+    a = ops.retain(store, CLEAN_FACT)
+    b = ops.retain(store, CLEAN_FACT)
+
+    def fail_vacuum():
+        raise sqlite3.OperationalError("no space for vacuum image")
+
+    monkeypatch.setattr(store, "vacuum", fail_vacuum)
+    report = ops.compact(store, apply=True)
+    assert report["vacuumed"] is False
+    assert "no space" in report["vacuum_error"]
+    assert report["duplicate_entries"] == 1  # dedup itself committed
+    assert store.get(a.id).status == "active"
+    assert store.get(b.id).status == "retracted"
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +289,29 @@ def test_quarantine_digest_keys_on_content_not_ids(store, tmp_path):
         ops.retain(other, SECRET_FACT)
         digest_b = ops.quarantine_digest(other)["digest"]
     assert digest_a == digest_b
+
+
+def test_quarantine_digest_distinguishes_newline_reason_lists(store):
+    """["manual:a\\nmanual:b"] and ["manual:a", "manual:b"] hash the same
+    under a "\\n".join — the fingerprint must keep them apart."""
+    e = store.insert(
+        "a dubious but shapeless fact",
+        status="quarantined",
+        quarantine_reasons=["manual:a\nmanual:b"],
+    )
+    before = ops.quarantine_digest(store)["digest"]
+    store.set_quarantine_reasons(e.id, ["manual:a", "manual:b"])
+    assert ops.quarantine_digest(store)["digest"] != before
+
+
+def test_quarantine_digest_never_echoes_spoofed_family_prefix(store):
+    """--reason accepts arbitrary text; a manual reason wearing a
+    taxonomy prefix must still bucket without echoing its payload."""
+    e = ops.retain(store, CLEAN_FACT)
+    ops.quarantine_entry(store, e.id, reason="secret:hunter2")
+    digest = ops.quarantine_digest(store)
+    assert "hunter2" not in json.dumps(digest)
+    assert digest["reason_counts"] == {"secret:other": 1}
 
 
 def test_quarantine_digest_reports_families_not_content(store):
@@ -281,6 +388,27 @@ def test_quarantine_digest_cli_rejects_mutation_flags(db, capsys):
     assert "read-only" in capsys.readouterr().err
     rc = main(["--db", db, "quarantine", "--digest", "--release", "1"])
     assert rc == 1
+
+
+def test_compact_cli_vacuum_failure_still_reports_dedup(
+    db, capsys, monkeypatch
+):
+    main(["--db", db, "retain", CLEAN_FACT])
+    main(["--db", db, "retain", CLEAN_FACT])
+    capsys.readouterr()
+
+    def fail_vacuum(self):
+        raise sqlite3.OperationalError("ioerr")
+
+    monkeypatch.setattr(MemoryStore, "vacuum", fail_vacuum)
+    rc = main(["--db", db, "compact", "--apply", "--json"])
+    out = capsys.readouterr()
+    report = json.loads(out.out)
+    assert rc == 1
+    assert "vacuum failed" in out.err
+    assert report["duplicate_entries"] == 1  # dedup committed anyway
+    assert report["vacuumed"] is False
+    assert report["vacuum_error"]
 
 
 def test_compact_fails_closed_on_corrupt_db(tmp_path, capsys):
