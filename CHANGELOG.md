@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- `__version__` now matches the published artifact: the 0.3.0 wheel on PyPI self-reports 0.1.0 (built before the version sync landed). This release exists so the index carries a wheel whose metadata and self-report agree.
+
 ## Unreleased (F4)
 
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
