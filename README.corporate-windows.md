@@ -60,7 +60,7 @@ Zscaler é comum em ambientes corporativos e se comporta diferente de um proxy g
 
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
-Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file in your own profile directory (quoting inside the file works normally, and no other user can replace it). The task inherits your user `PATH`; if the tool is not on it, write the tool's full path inside the `.cmd`. Register with the `ScheduledTask` cmdlets, which take the path literally and replace cleanly on rerun (`-Force`):
+Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file in your own profile directory (quoting inside the file works normally, and no other user can replace it). The task inherits your user `PATH`, so the wrapper first prepends the standard tool directory (`%USERPROFILE%\.local\bin`); if the tool lives elsewhere, write its full path inside the `.cmd`. Register with the `ScheduledTask` cmdlets, which take the path literally and replace cleanly on rerun (`-Force`):
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\devin-tasks"   # cmd.exe: mkdir "%USERPROFILE%\devin-tasks"
@@ -69,6 +69,7 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\devin-tasks"   # cmd.exe: 
 Save this as `%USERPROFILE%\devin-tasks\devin-brain.cmd`:
 
 ```batch
+set "PATH=%USERPROFILE%\.local\bin;%PATH%"
 devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"
 ```
 
