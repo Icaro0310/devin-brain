@@ -5,8 +5,8 @@ title: devin-memory
 authors:
   - family-names: Galvao
     given-names: Icaro
-url: "https://github.com/Icaro0310/devin-memory"
-repository-code: "https://github.com/Icaro0310/devin-memory"
+url: "https://github.com/Icaro0310/devin-brain"
+repository-code: "https://github.com/Icaro0310/devin-brain"
 license: MIT
 abstract: "Anti-poisoning memory layer for Devin: reviewed, versioned, provenance-tracked durable memory with a quarantine gate."
 keywords:
