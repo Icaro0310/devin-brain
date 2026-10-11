@@ -39,14 +39,20 @@ Use `--db` (memory.db store) and `--sessions-db` for non-default locations.
 
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
-Save this as `%USERPROFILE%\devin-tasks\devin-brain.cmd` (quoting works normally inside a `.cmd` file):
+Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file (quoting inside the file works normally). `%PUBLIC%` is used because it never contains spaces, keeping the stored action space-free:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:PUBLIC\devin-tasks"
+```
+
+Save this as `%PUBLIC%\devin-tasks\devin-brain.cmd`:
 
 ```batch
 devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"
 ```
 
 ```powershell
-schtasks /create /tn "devin-brain" /tr "%USERPROFILE%\devin-tasks\devin-brain.cmd" /sc weekly /d SUN /st 07:00 /f
+schtasks /create /tn "devin-brain" /tr "%PUBLIC%\devin-tasks\devin-brain.cmd" /sc weekly /d SUN /st 07:00 /f
 ```
 
 Runs under your account, no admin needed. Adjust `/sc`/`/st` (or `/sc onlogon` for daemons) to taste.
