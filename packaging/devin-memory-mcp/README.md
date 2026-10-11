@@ -1,4 +1,4 @@
-<!-- mcp-name: io.github.Icaro0310/devin-memory -->
+<!-- mcp-name: io.github.Icaro0310/devin-brain -->
 
 # devin-memory-mcp
 

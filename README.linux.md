@@ -19,7 +19,7 @@ uv tool install 'devin-memory[mcp]'
 ## Devin paths
 
 Session data normally lives under `${XDG_DATA_HOME:-$HOME/.local/share}/devin/cli/`; UI state and ACP stores under `${XDG_CONFIG_HOME:-$HOME/.config}/Devin/User/`.
-Use the tool's documented `--data-dir` or `--config-dir` flags for non-default locations.
+Use `--sessions-db`/`--db` for non-default locations.
 
 ## Environment notes
 
@@ -41,7 +41,7 @@ Use the tool's documented `--data-dir` or `--config-dir` flags for non-default l
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved)._
 
 ```cron
-0 7 * * 0 devin-memory extract --latest
+0 7 * * 0 devin-memory extract --latest --sessions-db ~/.local/share/devin/cli/sessions.db
 ```
 
 Equivalent `systemd --user` timer works too; enable lingering if it must run without a login session.

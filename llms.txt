@@ -5,7 +5,7 @@
 Agent memory is a poisoning vector: any tool persisting "facts" between sessions can be corrupted by one bad session, with no review step and no answer to "where did this come from?". devin-memory keeps a local SQLite store where every entry can carry `source_session_id`/`source_rowid` auditable against Devin's `sessions.db`, every write is screened for secret and injection shapes (suspect entries land in quarantine for human release), and entries can be superseded/retracted. It exports to the Devin memory MCP's `memories.jsonl` line shape. A companion CLI, `devin-learning`, extracts candidate lessons from sessions.db into reviewable skill drafts.
 
 ## Docs
-- [README](https://github.com/Icaro0310/devin-memory/blob/main/README.md): full documentation
+- [README](https://github.com/Icaro0310/devin-brain/blob/main/README.md): full documentation
 - [devin-internals-spec](https://github.com/Icaro0310/devin-internals-spec): store schema used for provenance audit
 
 ## Key commands

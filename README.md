@@ -6,7 +6,7 @@
 <a href="https://pypi.org/project/devin-memory/"><img src="https://img.shields.io/pypi/v/devin-memory" alt="PyPI"/></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-brain"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-brain/badge" alt="OpenSSF Scorecard"/></a>
 <a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx" alt="M8ven Score"/></a>
-<a href="https://glama.ai/mcp/servers/Icaro0310/devin-memory"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-memory/badges/score.svg" alt="Glama Score"/></a>
+<a href="https://glama.ai/mcp/servers/Icaro0310/devin-brain"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-brain/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://mcpservers.org/servers/icaro0310/devin-memory"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"/></a>
 <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-blueviolet" alt="MCP Registry"/></a>
 
@@ -151,7 +151,7 @@ devin-memory export --out memories.jsonl
 
 ## MCP server
 
-<!-- mcp-name: io.github.Icaro0310/devin-memory -->
+<!-- mcp-name: io.github.Icaro0310/devin-brain -->
 
 `devin-memory` is also a real MCP server (stdio) — the same retain/recall
 pipeline with the quarantine gate on every write, callable from Devin,
