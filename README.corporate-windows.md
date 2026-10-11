@@ -60,15 +60,25 @@ Zscaler é comum em ambientes corporativos e se comporta diferente de um proxy g
 
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
-Save this as `%USERPROFILE%\devin-tasks\devin-brain.cmd` (quoting works normally inside a `.cmd` file):
+Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file in your own profile directory (quoting inside the file works normally, and no other user can replace it). Register with the `ScheduledTask` cmdlets, which take the path literally:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\devin-tasks"   # cmd.exe: mkdir "%USERPROFILE%\devin-tasks"
+```
+
+Save this as `%USERPROFILE%\devin-tasks\devin-brain.cmd`:
 
 ```batch
 devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"
 ```
 
 ```powershell
-schtasks /create /tn "devin-brain" /tr "%USERPROFILE%\devin-tasks\devin-brain.cmd" /sc weekly /d SUN /st 07:00 /f
+$action  = New-ScheduledTaskAction -Execute "$env:USERPROFILE\devin-tasks\devin-brain.cmd"
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 7AM
+Register-ScheduledTask -TaskName "devin-brain" -Action $action -Trigger $trigger
 ```
+
+_cmd.exe users: the same registration works from Task Scheduler's GUI (Action = the .cmd path)._
 
 User-scope `schtasks` needs no admin. If Group Policy disables Task Scheduler (`0x80070005` "Access is denied"), run the command manually or use the tool's own `install` subcommand where available. Options needing elevation, "Run whether user is logged on or not", highest privileges, are usually policy-blocked; when they are, a user-scope logon trigger (`/sc onlogon`) is the realistic fallback.
 

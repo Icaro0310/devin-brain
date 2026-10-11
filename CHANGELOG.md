@@ -7,6 +7,7 @@
 ## Unreleased (F4)
 
 - **Docs** — platform guides regenerated (Zscaler section, per-package local-runtime bullet, scheduled extract with explicit `--db`/`--sessions-db`); `mcp-name` kept as `io.github.Icaro0310/devin-memory` to match the published MCP registry identity.
+- **Docs** — scheduled job now uses a `.cmd` wrapper under `%USERPROFILE%\devin-tasks` registered via `Register-ScheduledTask`, quoting-safe in cmd.exe and PowerShell and not writable by other local users.
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
 - **Docs** — ecosystem journey recuration recorded (six curated audiences; this product's ai-engineers and data-scientists paths were already regenerated).
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
