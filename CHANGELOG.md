@@ -44,6 +44,7 @@
 - `llms.txt` no longer states a hard-coded ecosystem size; the registry owns the count.
 
 - **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
+- **Fix** — `devin_memory.learning.__version__` is now the submodule's own version (synced with the package release) instead of the root `devin_memory.__version__`; it drives `devin-learning --version` and the `version` field in extract/review reports. Corrects the 0.3.0 note that attributed those outputs to the root module.
 
 ## 0.3.0
 
