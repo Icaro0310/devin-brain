@@ -1,4 +1,4 @@
-# devin-brain — Personal Windows guide
+# devin-brain, Personal Windows guide
 
 This guide covers unrestricted Windows setup. For restricted machines, see [README.corporate-windows.md](README.corporate-windows.md); for features, shared commands, limitations, and the safety model, see [README.md](README.md).
 
@@ -19,7 +19,7 @@ uv tool install "devin-memory[mcp]"
 ## Devin paths
 
 Session data normally lives under `%APPDATA%\devin\cli\`; UI state and ACP stores under `%APPDATA%\Devin\User\`.
-Use `--sessions-db`/`--db` for non-default locations.
+Use `--db` (memory.db store) and `--sessions-db` for non-default locations.
 
 ## Environment notes
 
@@ -30,20 +30,20 @@ Use `--sessions-db`/`--db` for non-default locations.
 ## Personal Windows specifics
 
 - **Python:** `uv` manages its own Python, which also avoids the Microsoft Store `python.exe` alias stub (it opens the Store instead of running). If you install Python from python.org anyway, tick "Add python.exe to PATH".
-- **Shell:** PowerShell 7 + Windows Terminal is the recommended setup; every command also works in `cmd.exe` and Windows PowerShell 5.1 — none require admin.
+- **Shell:** PowerShell 7 + Windows Terminal is the recommended setup; every command also works in `cmd.exe` and Windows PowerShell 5.1, none require admin.
 - **Install location:** executables live under `%USERPROFILE%\.local\bin`; data under `%APPDATA%\devin`. Nothing touches `Program Files` or the registry.
-- **WSL:** treat it as a Linux machine — follow [README.linux.md](README.linux.md) inside it.
+- **WSL:** treat it as a Linux machine, follow [README.linux.md](README.linux.md) inside it.
 - **Uninstall:** `uv tool uninstall <package>` (or `npm uninstall -g` for a Node.js tool) removes the CLI; delete `%APPDATA%\devin` to remove local data. No services or scheduled tasks are left behind.
 
 ## Recurring runs (optional)
 
-_Weekly knowledge extraction from recent sessions (proposed entries, human-approved)._
+_Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
 ```powershell
-schtasks /create /tn "devin-brain" /tr "devin-memory extract --latest --sessions-db %APPDATA%\devin\cli\sessions.db" /sc weekly /d SUN /st 07:00 /f
+schtasks /create /tn "devin-brain" /tr "devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sessions-db "%APPDATA%\devin\cli\sessions.db"" /sc weekly /d SUN /st 07:00 /f
 ```
 
-Runs under your account — no admin needed. Adjust `/sc`/`/st` (or `/sc onlogon` for daemons) to taste.
+Runs under your account, no admin needed. Adjust `/sc`/`/st` (or `/sc onlogon` for daemons) to taste.
 
 
 ## Troubleshooting

@@ -151,7 +151,7 @@ devin-memory export --out memories.jsonl
 
 ## MCP server
 
-<!-- mcp-name: io.github.Icaro0310/devin-brain -->
+<!-- mcp-name: io.github.Icaro0310/devin-memory -->
 
 `devin-memory` is also a real MCP server (stdio) — the same retain/recall
 pipeline with the quarantine gate on every write, callable from Devin,
