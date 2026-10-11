@@ -3,7 +3,8 @@ name: publish
 # Publishes to PyPI via Trusted Publishing (OIDC): the publisher registered on
 # PyPI expects job_workflow_ref == <this repo>/.github/workflows/pypi-publish.yml,
 # so the upload job must live in this file (not a reusable workflow).
-# Env "pypi" must exist; PYPI_API_TOKEN repo secret remains as fallback.
+# Env "pypi" must exist. OIDC only — no PYPI_API_TOKEN fallback (an
+# account-scoped token can upload to any project; do not reintroduce one).
 
 on:
   release:
@@ -50,7 +51,6 @@ jobs:
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
-          # No password: a set token disables Trusted Publishing (OIDC)
-          # and triggers PyPI warning emails. Secret kept in repo as
-          # dormant rollback only — it is never passed.
+          # No password: a set token disables Trusted Publishing (OIDC).
+          # There is no token fallback — do not reintroduce PYPI_API_TOKEN.
           skip-existing: true
