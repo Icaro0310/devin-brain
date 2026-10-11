@@ -252,6 +252,31 @@ class MemoryStore:
                 (json.dumps(list(reasons)), entry_id),
             )
 
+    def set_tags(self, entry_id: int, tags: Iterable[str]) -> None:
+        """Replace the tags list on a row (used by ``compact`` merges)."""
+        with self._con:
+            self._con.execute(
+                "UPDATE entries SET tags = ? WHERE id = ?",
+                (json.dumps(list(tags)), entry_id),
+            )
+
+    # -- maintenance -----------------------------------------------------------
+
+    def freelist_bytes(self) -> int:
+        """Bytes sitting on SQLite's free page list — what ``VACUUM``
+        could reclaim (an estimate; index pages also compact)."""
+        pages = self._con.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = self._con.execute("PRAGMA page_size").fetchone()[0]
+        return int(pages) * int(page_size)
+
+    def vacuum(self) -> None:
+        """Rebuild the database file in place, reclaiming free pages.
+
+        Runs outside a transaction (SQLite requirement); rows are never
+        rewritten semantically — this is pure file compaction.
+        """
+        self._con.execute("VACUUM")
+
     def supersede(
         self,
         old_id: int,

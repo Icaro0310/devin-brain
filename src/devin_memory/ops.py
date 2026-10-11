@@ -1,6 +1,7 @@
 """Memory operations: retain, recall, retract, supersede, release, verify —
 plus the F4 surface: manual quarantine, conflict links, session extraction
-and ``prime`` context rendering.
+and ``prime`` context rendering — and store maintenance: ``compact``
+(dedup + vacuum) and the ``quarantine_digest`` audit hash.
 
 All writes funnel through :func:`screen` first — the quarantine gate decides
 the initial status. ``recall``/``prime`` only ever return ``active``
@@ -9,6 +10,7 @@ entries, so a poisoned fact cannot leak back into an agent's context.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any, Iterable
@@ -480,3 +482,198 @@ def prime(
     if not shown:
         lines.append("(no active memories)")
     return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# quarantine digest (audit)
+# ---------------------------------------------------------------------------
+
+# Reason families whose ``family:name`` strings are a closed taxonomy
+# (screen.py) — safe to report verbatim. ``manual:*`` and anything else are
+# free-form (a user can pass any --reason), so they are aggregated, never
+# echoed.
+_AUDIT_REASON_FAMILIES = ("secret", "injection", "limit", "shape")
+
+
+def _reason_audit_key(reason: str) -> str:
+    family = reason.split(":", 1)[0]
+    if family in _AUDIT_REASON_FAMILIES:
+        return reason
+    if family == "manual":
+        return "manual:*"
+    return "other"
+
+
+def _sha256_hex(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _entry_fingerprint(entry: Entry) -> str:
+    """Content-keyed fingerprint of one entry — no ids, so two machines
+    holding the same quarantined fact produce the same print."""
+    content_sha = _sha256_hex(entry.content)
+    reasons_sha = _sha256_hex("\n".join(sorted(entry.quarantine_reasons)))
+    return _sha256_hex(f"{content_sha}:{reasons_sha}")
+
+
+def quarantine_digest(store: MemoryStore) -> dict[str, Any]:
+    """Deterministic audit digest of the quarantine lane (read-only).
+
+    ``digest`` is sha256 over the sorted per-entry fingerprints — each
+    fingerprint is sha256 of ``sha256(content) : sha256(sorted reasons)``.
+    Because prints key on content (not row ids), two stores holding the same
+    quarantined entries produce the same digest regardless of insertion
+    order, and any membership or reason change moves the digest. An empty
+    lane digests to sha256("").
+
+    The report carries counts and taxonomy-level reason buckets only —
+    content and free-form reason text never appear in the output.
+    """
+    entries = store.entries(status="quarantined")
+    reason_counts: dict[str, int] = {}
+    for entry in entries:
+        for reason in entry.quarantine_reasons:
+            key = _reason_audit_key(reason)
+            reason_counts[key] = reason_counts.get(key, 0) + 1
+    fingerprints = sorted(_entry_fingerprint(e) for e in entries)
+    return {
+        "status": "quarantined",
+        "count": len(entries),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "algorithm": "sha256",
+        "digest": _sha256_hex("\n".join(fingerprints)),
+    }
+
+
+# ---------------------------------------------------------------------------
+# compact (dedup + vacuum)
+# ---------------------------------------------------------------------------
+
+# Survivor preference inside a duplicate group: the most "live" status wins
+# so compacting never pushes a fact out of recall; ties keep the oldest row.
+_COMPACT_STATUS_RANK = {"active": 0, "proposed": 1, "quarantined": 2}
+
+
+def _db_file_bytes(store: MemoryStore) -> int | None:
+    """Size of the db file in bytes (``None`` for ``:memory:`` stores)."""
+    if str(store.path) == ":memory:":
+        return None
+    try:
+        return store.path.stat().st_size
+    except OSError:
+        return None
+
+
+def _dedup_groups(entries: list[Entry]) -> list[list[Entry]]:
+    """Groups of ≥2 non-retracted entries sharing (content, workspace).
+
+    ``retracted`` rows are history, not duplicates — a withdrawn fact
+    re-retained later is a distinct event, so they never join a group.
+    ``workspace`` is compared raw: dedup never crosses scope boundaries.
+    """
+    by_key: dict[tuple[str, str | None], list[Entry]] = {}
+    for entry in entries:
+        if entry.status == "retracted":
+            continue
+        by_key.setdefault((entry.content, entry.workspace), []).append(entry)
+    return [members for members in by_key.values() if len(members) > 1]
+
+
+def _dedup_survivor(members: list[Entry]) -> Entry:
+    return min(
+        members,
+        key=lambda e: (_COMPACT_STATUS_RANK.get(e.status, 99), e.id),
+    )
+
+
+def compact(store: MemoryStore, *, apply: bool = False) -> dict[str, Any]:
+    """Deduplicate the store; dry-run by default, mutates only with ``apply``.
+
+    A duplicate group is ≥2 non-retracted entries with identical ``content``
+    and ``workspace``. The survivor is the entry with the liveliest status
+    (``active`` > ``proposed`` > ``quarantined``), ties broken by lowest id;
+    every other copy becomes ``retracted`` — rows are never deleted, so
+    provenance and reasons stay auditable on the retracted rows. The
+    survivor inherits the union of the group's tags (recall surface) and,
+    when quarantined, the union of quarantine reasons (review accuracy).
+
+    With ``apply=True`` the plan is executed and the file ``VACUUM``ed —
+    the only byte savings available, since dedup itself deletes nothing.
+    The report never prints content; groups are identified by
+    ``keep_id``/``drop_ids`` and a truncated content sha256.
+    """
+    entries = store.entries()
+    live = [e for e in entries if e.status != "retracted"]
+    groups: list[dict[str, Any]] = []
+    for members in _dedup_groups(entries):
+        members = sorted(members, key=lambda e: e.id)
+        survivor = _dedup_survivor(members)
+        groups.append(
+            {
+                "keep_id": survivor.id,
+                "status": survivor.status,
+                "drop_ids": [e.id for e in members if e.id != survivor.id],
+                "content_sha256": _sha256_hex(members[0].content)[:12],
+                "workspace": survivor.workspace,
+            }
+        )
+    groups.sort(key=lambda g: g["keep_id"])
+    dropped = sum(len(g["drop_ids"]) for g in groups)
+    report: dict[str, Any] = {
+        "dry_run": not apply,
+        "entries_total": len(entries),
+        "entries_live": len(live),
+        "entries_live_after": len(live) - dropped,
+        "duplicate_groups": len(groups),
+        "duplicate_entries": dropped,
+        "groups": groups,
+        "db_bytes_before": _db_file_bytes(store),
+        "freelist_bytes": store.freelist_bytes(),
+        "db_bytes_after": None,
+    }
+    if not apply:
+        return report
+
+    for group, members in zip(groups, _group_members(store, groups)):
+        survivor = members[group["keep_id"]]
+        drops = [members[i] for i in group["drop_ids"]]
+        merged_tags = _norm_tags(
+            [*survivor.tags, *(t for d in drops for t in d.tags)]
+        )
+        if merged_tags != list(survivor.tags):
+            store.set_tags(survivor.id, merged_tags)
+        if survivor.status == "quarantined":
+            merged_reasons = [
+                *survivor.quarantine_reasons,
+                *(r for d in drops for r in d.quarantine_reasons),
+            ]
+            seen: dict[str, None] = {}
+            for reason in merged_reasons:
+                seen.setdefault(reason)
+            if list(seen) != list(survivor.quarantine_reasons):
+                store.set_quarantine_reasons(survivor.id, list(seen))
+        for drop in drops:
+            store.set_status(drop.id, "retracted")
+    store.vacuum()
+
+    report["entries_live_after"] = len(
+        [e for e in store.entries() if e.status != "retracted"]
+    )
+    report["db_bytes_after"] = _db_file_bytes(store)
+    return report
+
+
+def _group_members(
+    store: MemoryStore, groups: list[dict[str, Any]]
+) -> list[dict[int, Entry]]:
+    """Reload the entries named by a plan, keyed by id (fresh state)."""
+    out: list[dict[int, Entry]] = []
+    for group in groups:
+        members = {}
+        for entry_id in [group["keep_id"], *group["drop_ids"]]:
+            entry = store.get(entry_id)
+            if entry is None:
+                raise EntryNotFoundError(f"no entry with id {entry_id}")
+            members[entry_id] = entry
+        out.append(members)
+    return out
