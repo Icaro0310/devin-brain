@@ -16,6 +16,8 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
 - ``prime``       compact recalled-context block for a workspace
 - ``verify``      audit an entry's provenance against a sessions.db
 - ``extract``     mine a session into proposed entries
+- ``compact``     dedup live entries (dry-run unless ``apply``)
+- ``quarantine_digest``  deterministic audit hash of the quarantine lane
 
 The DB is ``./memory.db`` by default — ``--db PATH`` or the
 ``DEVIN_MEMORY_DB`` env var override it, exactly like the CLI.
@@ -152,6 +154,16 @@ def do_extract(sessions_db: str, session_id: str = "",
         )
 
 
+def do_compact(apply: bool = False) -> dict:
+    with _store() as store:
+        return ops.compact(store, apply=apply)
+
+
+def do_quarantine_digest() -> dict:
+    with _store() as store:
+        return ops.quarantine_digest(store)
+
+
 # ---------------------------------------------------------------------------
 # MCP server
 # ---------------------------------------------------------------------------
@@ -265,6 +277,19 @@ def build_server():
         knowledge -> proposed entries awaiting approve."""
         return _guarded(do_extract)(
             sessions_db, session_id, latest, auto_approve)
+
+    @server.tool()
+    def compact(apply: bool = False) -> dict:
+        """Deduplicate the store: same content+workspace live entries ->
+        one survivor, the rest retracted (never deleted). Dry-run unless
+        apply=True; apply also vacuums the file."""
+        return _guarded(do_compact)(apply)
+
+    @server.tool()
+    def quarantine_digest() -> dict:
+        """Deterministic sha256 audit digest of the quarantine lane —
+        count + taxonomy reason buckets + set hash, no content."""
+        return _guarded(do_quarantine_digest)()
 
     return server
 

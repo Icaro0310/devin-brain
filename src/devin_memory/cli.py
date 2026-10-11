@@ -5,12 +5,14 @@ Subcommands:
 - ``retain "<content>" [--tags a,b] [--workspace PATH]``
   ``[--source-session ID] [--source-rowid N]``
 - ``recall "<query>" [--limit N] [--tags a,b] [--json]``
-- ``quarantine [<id>] [--reason r] [--list] [--release ID] [--json]``
+- ``quarantine [<id>] [--reason r] [--list] [--release ID] [--digest]``
+  ``[--json]``
 - ``conflicts [--json]`` — contradiction pairs linked at retain time
 - ``extract <session-id|--latest> --sessions-db DB [--auto-approve]``
 - ``approve <id>`` — promote a proposed extraction to active
 - ``prime [--workspace PATH] [--max-tokens N]`` — hook context block
 - ``retract <id>`` · ``supersede <id> "<content>"`` · ``list``
+- ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
 - ``export --out memories.jsonl [--all]``
 - ``verify <id> --sessions-db <sessions.db>``
 
@@ -133,7 +135,31 @@ def cmd_recall(args: argparse.Namespace) -> int:
 
 
 def cmd_quarantine(args: argparse.Namespace) -> int:
+    if args.digest and (
+        args.id is not None or args.release is not None or args.reason
+    ):
+        print(
+            "error: --digest is read-only; it takes no id/--release/--reason",
+            file=sys.stderr,
+        )
+        return 1
     with _open_store(args) as store:
+        if args.digest:
+            digest = ops.quarantine_digest(store)
+            if args.json:
+                _print_json(digest)
+            else:
+                print(
+                    f"quarantine digest: count={digest['count']}"
+                    f" sha256={digest['digest']}"
+                )
+                if digest["reason_counts"]:
+                    parts = "  ".join(
+                        f"{k}={v}"
+                        for k, v in digest["reason_counts"].items()
+                    )
+                    print(f"  reasons: {parts}")
+            return 0
         if args.release is not None:
             entry = ops.release(store, args.release)
             if args.json:
@@ -296,6 +322,58 @@ def cmd_prime(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compact(args: argparse.Namespace) -> int:
+    with _open_store(args) as store:
+        report = ops.compact(store, apply=args.apply)
+    if args.json:
+        _print_json(report)
+    else:
+        mode = "dry-run" if report["dry_run"] else "applied"
+        print(
+            f"compact ({mode}): {report['entries_live']} live entries"
+            f" -> {report['entries_live_after']}"
+            f" ({report['duplicate_entries']} duplicates in"
+            f" {report['duplicate_groups']} groups;"
+            f" {report['entries_total']} rows total)"
+        )
+        if report["groups"]:
+            rows = [
+                [
+                    str(g["keep_id"]),
+                    g["status"],
+                    ",".join(str(i) for i in g["drop_ids"]),
+                    g["content_sha256"],
+                ]
+                for g in report["groups"]
+            ]
+            print(
+                _fmt_table(
+                    ["KEEP", "STATUS", "RETRACTED", "CONTENT_SHA256"], rows
+                )
+            )
+        before = report["db_bytes_before"]
+        if before is not None:
+            if report["dry_run"]:
+                print(
+                    f"db: {before} bytes"
+                    f" ({report['freelist_bytes']} B reclaimable by vacuum)"
+                )
+            else:
+                print(f"db: {before} -> {report['db_bytes_after']} bytes")
+        if report["dry_run"]:
+            print("dry-run — re-run with --apply to compact")
+    if report["vacuum_error"]:
+        # dedup committed; only the maintenance pass failed — say so
+        # rather than reporting the whole command as failed.
+        print(
+            "warning: dedup applied but vacuum failed:"
+            f" {report['vacuum_error']}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
@@ -347,6 +425,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="list (default action)")
     p.add_argument("--release", type=int, metavar="ID",
                    help="move a quarantined entry back to active")
+    p.add_argument("--digest", action="store_true",
+                   help="print a deterministic audit digest of the lane"
+                        " (read-only; no content)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_quarantine)
 
@@ -414,6 +495,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id", type=int)
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_approve)
+
+    p = sub.add_parser(
+        "compact",
+        help="dedup live entries (dry-run; --apply retracts copies + vacuums)",
+    )
+    p.add_argument("--apply", action="store_true",
+                   help="execute the plan (default: report only)")
+    p.add_argument("--json", action="store_true", help="JSON output")
+    p.set_defaults(func=cmd_compact)
 
     p = sub.add_parser(
         "prime",
