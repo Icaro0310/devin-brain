@@ -39,7 +39,7 @@ Use `--db` (memory.db store) and `--sessions-db` for non-default locations.
 
 _Weekly knowledge extraction from recent sessions (proposed entries, human-approved). `--db` pins the memory store, otherwise `extract` writes ./memory.db under whatever directory the scheduler runs from._
 
-Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file in your own profile directory (quoting inside the file works normally, and no other user can replace it). Register with the `ScheduledTask` cmdlets, which take the path literally:
+Quoted path arguments inside `/tr` fail differently in cmd.exe and PowerShell 5.1, so this job goes through a wrapper `.cmd` file in your own profile directory (quoting inside the file works normally, and no other user can replace it). The task inherits your user `PATH`; if the tool is not on it, write the tool's full path inside the `.cmd`. Register with the `ScheduledTask` cmdlets, which take the path literally and replace cleanly on rerun (`-Force`):
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\devin-tasks"   # cmd.exe: mkdir "%USERPROFILE%\devin-tasks"
@@ -54,7 +54,7 @@ devin-memory --db "%USERPROFILE%\devin-memory\memory.db" extract --latest --sess
 ```powershell
 $action  = New-ScheduledTaskAction -Execute "$env:USERPROFILE\devin-tasks\devin-brain.cmd"
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 7AM
-Register-ScheduledTask -TaskName "devin-brain" -Action $action -Trigger $trigger
+Register-ScheduledTask -TaskName "devin-brain" -Action $action -Trigger $trigger -Force
 ```
 
 _cmd.exe users: the same registration works from Task Scheduler's GUI (Action = the .cmd path)._
