@@ -1,0 +1,63 @@
+{
+  "name": "devin-memory",
+  "displayName": "devin-memory (devin-brain)",
+  "description": "Registers the devin-memory MCP server (devin-brain: anti-poisoning memory for agents) with VS Code's MCP support. Thin adapter: the extension only declares how to launch the server — no tool logic is reimplemented here.",
+  "version": "0.1.0",
+  "publisher": "icaro0310",
+  "license": "MIT",
+  "devin-memory-mcp": ">=0.3.1,<0.4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Icaro0310/devin-brain.git",
+    "directory": "adapters/vscode"
+  },
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "devin",
+    "mcp",
+    "memory",
+    "agent"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "devin-memory",
+        "label": "devin-memory (devin-brain)"
+      }
+    ],
+    "configuration": {
+      "title": "devin-memory",
+      "properties": {
+        "devinMemory.executable": {
+          "type": "string",
+          "default": "devin-memory-mcp",
+          "description": "devin-memory MCP server executable (name or absolute path; e.g. 'uvx' with args ['devin-memory-mcp'])"
+        },
+        "devinMemory.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Arguments passed to the MCP server executable"
+        },
+        "devinMemory.dbPath": {
+          "type": "string",
+          "default": "",
+          "description": "DEVIN_MEMORY_DB — path to memory.db (empty = server default: ./memory.db under the workspace folder)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {}
+}
