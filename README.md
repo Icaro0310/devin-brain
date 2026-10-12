@@ -179,9 +179,12 @@ Client config:
 
 Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `retract`, `supersede`, `quarantine`, `release`, `approve`, `conflicts`,
-`prime`, `verify`, `extract`, `compact`, `quarantine_digest`. Every tool
-returns structured data or a `{"error", "detail"}` object — nothing raises
-through the transport. `DEVIN_MEMORY_DB` works as an alternative to `--db`.
+`prime`, `verify`, `extract`, `compact`, `quarantine_digest`. The `release`
+and `approve` promotion overrides are only registered when the server runs
+with `DEVIN_MEMORY_MCP_PROMOTE=1` — otherwise promotion stays human-only via
+the CLI. Every tool returns structured data or a `{"error", "detail"}`
+object — nothing raises through the transport. `DEVIN_MEMORY_DB` works as an
+alternative to `--db`.
 
 ## Learn from sessions with `devin-learning`
 
