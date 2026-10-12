@@ -23,7 +23,10 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
 registered when the operator launches the server with
 ``DEVIN_MEMORY_MCP_PROMOTE=1``, so an AI-driven client cannot
 self-promote quarantined or proposed content past the anti-poisoning
-lane. Humans use ``devin-memory release``/``approve`` directly.
+lane. The same flag also gates ``extract``'s ``auto_approve``
+parameter, which would otherwise bypass the review step. Humans use
+``devin-memory quarantine --release ID`` and ``devin-memory approve ID``
+directly.
 
 The DB is ``./memory.db`` by default — ``--db PATH`` or the
 ``DEVIN_MEMORY_DB`` env var override it, exactly like the CLI.
@@ -295,7 +298,8 @@ def build_server():
         """Mine a Devin session (read-only sessions.db) for durable
         knowledge -> proposed entries awaiting approve."""
         return _guarded(do_extract)(
-            sessions_db, session_id, latest, auto_approve)
+            sessions_db, session_id, latest,
+            auto_approve and _promotion_enabled())
 
     @server.tool()
     def compact(apply: bool = False) -> dict:

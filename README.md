@@ -182,7 +182,10 @@ Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `prime`, `verify`, `extract`, `compact`, `quarantine_digest`. The `release`
 and `approve` promotion overrides are only registered when the server runs
 with `DEVIN_MEMORY_MCP_PROMOTE=1` — otherwise promotion stays human-only via
-the CLI. Every tool returns structured data or a `{"error", "detail"}`
+the CLI (`devin-memory quarantine --release <id>` / `devin-memory approve
+<id>`). The same flag gates `extract`'s `auto_approve` parameter, which is
+forced off without the opt-in so an AI client cannot skip the review step.
+Every tool returns structured data or a `{"error", "detail"}`
 object — nothing raises through the transport. `DEVIN_MEMORY_DB` works as an
 alternative to `--db`.
 

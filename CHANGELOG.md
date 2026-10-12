@@ -21,6 +21,13 @@
   membership/reason change moves it. Also exposed as the
   `quarantine_digest` MCP tool.
 
+- **MCP promotion gate** — the `release` and `approve` tools are no
+  longer registered by default: they only appear when the server is
+  launched with `DEVIN_MEMORY_MCP_PROMOTE=1`, so an AI-driven MCP client
+  cannot self-promote quarantined or proposed content past the review
+  lane. `extract`'s `auto_approve` parameter is also forced off without
+  the opt-in. Promotion stays human-only via `devin-memory quarantine
+  --release <id>` and `devin-memory approve <id>`.
 - **Docs** — platform guides regenerated (Zscaler section, per-package local-runtime bullet, scheduled extract with explicit `--db`/`--sessions-db`); `mcp-name` kept as `io.github.Icaro0310/devin-memory` to match the published MCP registry identity.
 - **Docs** — scheduled job now uses a `.cmd` wrapper under `%USERPROFILE%\devin-tasks` registered via `Register-ScheduledTask`, quoting-safe in cmd.exe and PowerShell and not writable by other local users. The wrapper prepends `%USERPROFILE%\.local\bin` to `PATH`, registration uses `-Force`, and the logon trigger is pinned with `-User $env:USERNAME`.
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
