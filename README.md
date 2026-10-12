@@ -121,6 +121,7 @@ devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
 devin-memory quarantine                          # list with reasons
 devin-memory quarantine <id> [--reason manual:x] # mark entry as quarantined
 devin-memory quarantine --release <id>           # human override -> active
+devin-memory quarantine --digest [--json]        # audit hash (read-only)
 
 # Contradictions: a conflicting retain is linked, not overwritten
 devin-memory conflicts [--json]     # (newer, older) pairs; resolve with
@@ -141,6 +142,8 @@ devin-memory prime [--workspace PATH] [--max-tokens N]
 devin-memory supersede <id> "corrected fact"
 devin-memory retract <id>
 devin-memory list [--status active|proposed|quarantined|retracted] [--json]
+devin-memory compact [--json]   # dedup report (dry-run)
+devin-memory compact --apply    # retract copies + vacuum the file
 
 # Audit an entry's provenance against a real sessions.db (read-only)
 devin-memory verify <id> --sessions-db path/to/sessions.db
@@ -176,9 +179,9 @@ Client config:
 
 Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `retract`, `supersede`, `quarantine`, `release`, `approve`, `conflicts`,
-`prime`, `verify`, `extract`. Every tool returns structured data or a
-`{"error", "detail"}` object — nothing raises through the transport.
-`DEVIN_MEMORY_DB` works as an alternative to `--db`.
+`prime`, `verify`, `extract`, `compact`, `quarantine_digest`. Every tool
+returns structured data or a `{"error", "detail"}` object — nothing raises
+through the transport. `DEVIN_MEMORY_DB` works as an alternative to `--db`.
 
 ## Learn from sessions with `devin-learning`
 
@@ -222,6 +225,20 @@ quarantined content is never printed and never recalled.
   only prime inside that workspace; entries written under a different
   machine profile never prime (the profile defaults to `corporate` —
   fail-closed).
+- **`compact`** deduplicates: non-retracted entries sharing exact
+  `content` + `workspace` collapse to one survivor — the liveliest status
+  wins (`active` > `proposed` > `quarantined`), ties keep the oldest row.
+  The other copies become `retracted` (never deleted — history and reasons
+  stay auditable) and the survivor inherits the union of tags. Default is a
+  dry-run report (live entries N→M, per-group `keep`/`retracted` ids,
+  truncated content sha256 — never content); `--apply` executes and runs
+  `VACUUM` on the file.
+- **`quarantine --digest`** prints a deterministic audit fingerprint of the
+  lane: entry count, reason buckets by taxonomy family (free-form manual
+  reasons collapse to `manual:*`), and a sha256 over the sorted per-entry
+  fingerprints `sha256(content)+sorted(reasons)`. Keyed on content, not row
+  ids — two stores holding the same quarantined facts digest identically,
+  and any membership or reason change moves it. Always read-only.
 
 The store is `./memory.db` by default — override with `--db` or
 `DEVIN_MEMORY_DB`. It is the only store this tool writes to; Devin's
