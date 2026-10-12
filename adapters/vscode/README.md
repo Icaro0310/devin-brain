@@ -30,14 +30,19 @@ stdio definition:
 
 - **command**: `devinMemory.executable` (default `devin-memory-mcp`)
 - **args**: `devinMemory.args` (default `[]`)
-- **env**: `DEVIN_MEMORY_DB` only when `devinMemory.dbPath` is set
-- **cwd**: first workspace folder (so the default `./memory.db` lands in
-  the project)
+- **env**: built from scratch — `DEVIN_MEMORY_DB` only when
+  `devinMemory.dbPath` is set
+- **cwd**: the first workspace folder's `Uri` (assigned on the definition,
+  so the server's default `./memory.db` lands in the project)
 
-**Safety**: `DEVIN_MEMORY_MCP_PROMOTE` is never set. The server gates its
-`release`/`approve` promotion overrides behind that operator opt-in, so the
-editor-facing server keeps its default, non-promoting tool surface
-(everything still passes through the quarantine gate).
+**Safety**: `DEVIN_MEMORY_MCP_PROMOTE` is pinned to `"0"` — even if the
+editor's ambient environment carries the opt-in, the server never sees it.
+The `release`/`approve` promotion overrides stay human-only, and every
+write still passes through the quarantine gate.
+
+When `devinMemory` settings or workspace folders change, the provider
+fires `onDidChangeMcpServerDefinitions` so VS Code re-collects the
+definition instead of launching a stale one.
 
 ## Settings
 

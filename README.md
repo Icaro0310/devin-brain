@@ -189,6 +189,12 @@ Every tool returns structured data or a `{"error", "detail"}`
 object — nothing raises through the transport. `DEVIN_MEMORY_DB` works as an
 alternative to `--db`.
 
+**VS Code:** `adapters/vscode/` ships an extension that registers this
+server with the editor's built-in MCP support (server definition provider,
+VS Code ≥1.102) — launch command, optional `DEVIN_MEMORY_DB` and workspace
+`cwd` are declared there; the promotion opt-in is pinned off so the
+editor-facing server keeps its non-promoting surface.
+
 ## Learn from sessions with `devin-learning`
 
 This companion CLI extracts candidate lessons from a `sessions.db` and writes
