@@ -17,9 +17,11 @@ to keep alive:
 - **A resident copy is unreachable.** systemd could hold a
   `devin-memory-mcp` process open, but no client could ever connect to
   it — the transport is the stdin/stdout pair the spawning client owns.
-- **A resident copy is harmful.** The server opens `memory.db`; an
-  orphaned instance holding the sqlite file just adds lock contention
-  against the instances clients actually spawn.
+- **A resident copy is harmful.** Each tool call opens and closes
+  `MemoryStore`, so a per-request connection model is already correct;
+  an orphaned instance adds nothing but a stray process and, when its
+  requests overlap a real client's, extra lock contention on
+  `memory.db`.
 - **The lifecycle is already correct.** Exit-on-stdin-close is the
   designed behavior; a `Restart=` policy would fight it.
 - **The trust model is per-launch.** Promotion tools (`release`,
