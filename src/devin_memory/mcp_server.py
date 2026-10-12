@@ -10,14 +10,23 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
 - ``retract``     withdraw an entry (kept for history)
 - ``supersede``   replace an entry with a corrected version
 - ``quarantine``  move an entry to the quarantine lane
-- ``release``     human override: quarantined -> active
-- ``approve``     promote a proposed extraction to active
+- ``release``     human override: quarantined -> active (opt-in, below)
+- ``approve``     promote a proposed extraction to active (opt-in, below)
 - ``conflicts``   contradiction pairs linked at retain time
 - ``prime``       compact recalled-context block for a workspace
 - ``verify``      audit an entry's provenance against a sessions.db
 - ``extract``     mine a session into proposed entries
 - ``compact``     dedup live entries (dry-run unless ``apply``)
 - ``quarantine_digest``  deterministic audit hash of the quarantine lane
+
+``release`` and ``approve`` are promotion overrides — they are only
+registered when the operator launches the server with
+``DEVIN_MEMORY_MCP_PROMOTE=1``, so an AI-driven client cannot
+self-promote quarantined or proposed content past the anti-poisoning
+lane. The same flag also gates ``extract``'s ``auto_approve``
+parameter, which would otherwise bypass the review step. Humans use
+``devin-memory quarantine --release ID`` and ``devin-memory approve ID``
+directly.
 
 The DB is ``./memory.db`` by default — ``--db PATH`` or the
 ``DEVIN_MEMORY_DB`` env var override it, exactly like the CLI.
@@ -197,6 +206,15 @@ def _guarded(fn):
     return wrapper
 
 
+def _promotion_enabled() -> bool:
+    """``release``/``approve`` are human overrides: they only register
+    when the operator opts in via ``DEVIN_MEMORY_MCP_PROMOTE=1`` in the
+    server environment — an AI-driven MCP client must not be able to
+    self-promote content past the quarantine lane. Read at server-build
+    time so the env the server is launched with decides."""
+    return os.environ.get("DEVIN_MEMORY_MCP_PROMOTE") == "1"
+
+
 def build_server():
     server = _make_app("devin-memory")
 
@@ -243,15 +261,19 @@ def build_server():
         """Move an entry to the quarantine lane (review hold)."""
         return _guarded(do_quarantine)(entry_id, reason)
 
-    @server.tool()
-    def release(entry_id: int) -> dict:
-        """Human override: move a quarantined entry back to active."""
-        return _guarded(do_release)(entry_id)
+    # Human overrides — gated: absent unless the operator opts in, so an
+    # AI client cannot promote content past the quarantine lane.
+    if _promotion_enabled():
 
-    @server.tool()
-    def approve(entry_id: int) -> dict:
-        """Promote a proposed extraction to active memory."""
-        return _guarded(do_approve)(entry_id)
+        @server.tool()
+        def release(entry_id: int) -> dict:
+            """Human override: move a quarantined entry back to active."""
+            return _guarded(do_release)(entry_id)
+
+        @server.tool()
+        def approve(entry_id: int) -> dict:
+            """Promote a proposed extraction to active memory."""
+            return _guarded(do_approve)(entry_id)
 
     @server.tool()
     def conflicts() -> list[dict]:
@@ -276,7 +298,8 @@ def build_server():
         """Mine a Devin session (read-only sessions.db) for durable
         knowledge -> proposed entries awaiting approve."""
         return _guarded(do_extract)(
-            sessions_db, session_id, latest, auto_approve)
+            sessions_db, session_id, latest,
+            auto_approve and _promotion_enabled())
 
     @server.tool()
     def compact(apply: bool = False) -> dict:

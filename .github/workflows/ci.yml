@@ -31,7 +31,7 @@ jobs:
         run: |
           pip install "devin-redact @ git+https://github.com/Icaro0310/devin-state.git#subdirectory=packages/redact" "devin-internals-spec @ git+https://github.com/Icaro0310/devin-internals-spec.git"
           pip install -e ".[dev]" --no-deps
-          pip install "pytest>=8"
+          pip install "pytest>=8" "mcp>=1.9"
 
       - name: Test
         run: pytest -q

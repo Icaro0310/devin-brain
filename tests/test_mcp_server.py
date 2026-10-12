@@ -97,13 +97,72 @@ def test_quarantine_digest_is_stable_and_content_free(db):
     assert "sk-" not in str(first)
 
 
-def test_build_server_registers_tools():
-    mcp = pytest.importorskip("mcp")
-    server = mcp_srv.build_server()
+def _registered_tool_names(server) -> set:
     manager = getattr(server, "_tool_manager", None)
-    names = set(getattr(manager, "_tools", {}) or {})
+    return set(getattr(manager, "_tools", {}) or {})
+
+
+def test_build_server_registers_tools(monkeypatch):
+    pytest.importorskip("mcp")
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    names = _registered_tool_names(mcp_srv.build_server())
     expected = {"retain", "recall", "screen", "list", "retract",
-                "supersede", "quarantine", "release", "approve",
-                "conflicts", "prime", "verify", "extract",
-                "compact", "quarantine_digest"}
+                "supersede", "quarantine", "conflicts", "prime",
+                "verify", "extract", "compact", "quarantine_digest"}
     assert expected <= names
+
+
+def test_promotion_tools_hidden_by_default(monkeypatch):
+    """``release``/``approve`` are human overrides — absent from the MCP
+    surface unless the operator opts in, so an AI client cannot
+    self-promote quarantined or proposed content."""
+    pytest.importorskip("mcp")
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    names = _registered_tool_names(mcp_srv.build_server())
+    assert "release" not in names
+    assert "approve" not in names
+    assert "retain" in names  # the rest of the surface is unchanged
+
+
+def test_promotion_tools_opt_in_registers_them(monkeypatch):
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("DEVIN_MEMORY_MCP_PROMOTE", "1")
+    names = _registered_tool_names(mcp_srv.build_server())
+    assert {"release", "approve"} <= names
+
+
+def _extract_tool(server):
+    return server._tool_manager._tools["extract"].fn
+
+
+def test_extract_auto_approve_masked_without_opt_in(monkeypatch, db):
+    """An AI client passing ``auto_approve=True`` must not bypass the
+    review lane: without ``DEVIN_MEMORY_MCP_PROMOTE=1`` the tool forces
+    the flag off before it reaches ``ops.extract_session``."""
+    pytest.importorskip("mcp")
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    seen = {}
+
+    def spy(store, sessions_db, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(mcp_srv.ops, "extract_session", spy)
+    tool = _extract_tool(mcp_srv.build_server())
+    tool(sessions_db="sessions.db", auto_approve=True)
+    assert seen["auto_approve"] is False
+
+
+def test_extract_auto_approve_honored_with_opt_in(monkeypatch, db):
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("DEVIN_MEMORY_MCP_PROMOTE", "1")
+    seen = {}
+
+    def spy(store, sessions_db, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(mcp_srv.ops, "extract_session", spy)
+    tool = _extract_tool(mcp_srv.build_server())
+    tool(sessions_db="sessions.db", auto_approve=True)
+    assert seen["auto_approve"] is True
