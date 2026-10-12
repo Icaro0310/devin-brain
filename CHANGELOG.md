@@ -21,6 +21,7 @@
   membership/reason change moves it. Also exposed as the
   `quarantine_digest` MCP tool.
 
+- **Docs** — corporate-windows guide: Zscaler root export now requires PEM ("Base-64 encoded X.509" wizard option or `certutil -encode` after `Export-Certificate`, which emits DER) and distinguishes `certmgr.msc` (Current User store) from `certlm.msc` (Local Machine store); the offline recipe installs `setuptools`+`wheel` before `--no-build-isolation`.
 - **Docs** — platform guides regenerated (Zscaler section, per-package local-runtime bullet, scheduled extract with explicit `--db`/`--sessions-db`); `mcp-name` kept as `io.github.Icaro0310/devin-memory` to match the published MCP registry identity.
 - **Docs** — scheduled job now uses a `.cmd` wrapper under `%USERPROFILE%\devin-tasks` registered via `Register-ScheduledTask`, quoting-safe in cmd.exe and PowerShell and not writable by other local users. The wrapper prepends `%USERPROFILE%\.local\bin` to `PATH`, registration uses `-Force`, and the logon trigger is pinned with `-User $env:USERNAME`.
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
