@@ -37,12 +37,19 @@ jobs:
         run: pytest -q
 
   adapter-vscode:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Test VS Code adapter
-        # runners ship a current Node LTS; the adapter tests are pure JS
-        run: node --test "adapters/vscode/test/*.test.js"
+        # bare `node --test` auto-discovers test/*.test.js — a positional
+        # glob only works on Node >=22 and never inside quotes; the tests
+        # are pure JS and run on every supported Node.
+        working-directory: adapters/vscode
+        run: node --test
 
   secrets-scan:
     permissions:
