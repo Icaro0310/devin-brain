@@ -177,6 +177,32 @@ Client config:
 }
 ```
 
+The same stdio server registers in other MCP hosts:
+
+**Zed** — `context_servers` in `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "devin-memory": {
+      "command": { "path": "devin-memory-mcp", "args": ["--db", "/path/to/memory.db"] }
+    }
+  }
+}
+```
+
+**JetBrains** — Settings → Tools → AI Assistant → Model Context Protocol → Add:
+
+```json
+{ "mcpServers": { "devin-memory": { "command": "devin-memory-mcp", "args": ["--db", "/path/to/memory.db"] } } }
+```
+
+**Antigravity** — `~/.gemini/config/mcp_config.json`:
+
+```json
+{ "mcpServers": { "devin-memory": { "command": "devin-memory-mcp", "args": ["--db", "/path/to/memory.db"] } } }
+```
+
 Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `retract`, `supersede`, `quarantine`, `release`, `approve`, `conflicts`,
 `prime`, `verify`, `extract`, `compact`, `quarantine_digest`. The `release`
