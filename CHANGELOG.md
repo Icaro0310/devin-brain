@@ -6,6 +6,10 @@
 
 ## Unreleased (F4)
 
+- **CI** — `ci.yml` calls the reusable `adapters-check` sensor
+  (`devin-powerups` `@v1`): scans distributed adapter/skill files for
+  personal paths, internal names, token shapes and SKILL.md command
+  coherence.
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,
