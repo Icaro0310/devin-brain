@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{ name = "Icaro0310" }]
 dependencies = [
     "devin-redact>=0.2.0",
-    "devin-internals-spec>=0.3.0",
+    "devin-internals-spec>=0.3.1",
 ]
 
 [project.optional-dependencies]

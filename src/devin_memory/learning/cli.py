@@ -11,7 +11,7 @@ from pathlib import Path
 from devin_internals.schema import SchemaError
 
 from . import __version__
-from .extract import extract_candidates
+from .extract import extract_candidates, scan_watermark
 from .report import build_report, render_markdown, write_report
 from .review import review_candidates, review_text
 from .skills import LiveSkillsDirError, emit_drafts
@@ -44,6 +44,21 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow --out to be a live .devin/skills directory",
     )
+    extract_p.add_argument(
+        "--since",
+        type=int,
+        default=0,
+        metavar="EPOCH_MS",
+        help="skip message nodes created at or before this timestamp "
+        "(milliseconds, watermark filter)",
+    )
+    extract_p.add_argument(
+        "--incremental",
+        action="store_true",
+        help="watermark mode via the shared cursor "
+        "(.devin/devin-learning-extract-state.json): extract only nodes "
+        "newer than the last committed run, then advance the watermark",
+    )
 
     review_p = sub.add_parser(
         "review", help="re-review emitted drafts (dry-run by default)"
@@ -61,13 +76,22 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_extract(args: argparse.Namespace) -> int:
+    cursor = None
+    if args.incremental:
+        from devin_internals.cursor import Cursor
+
+        cursor = Cursor("devin-learning-extract")
+    since = args.since or (cursor.get("last_node_at", 0) if cursor else 0)
     try:
-        candidates = extract_candidates(args.sessions_db)
+        candidates = extract_candidates(args.sessions_db, since=since)
         verdicts = review_candidates(candidates)
         written = emit_drafts(verdicts, args.out, apply=args.apply)
     except (SchemaError, LiveSkillsDirError, OSError) as exc:
         print(f"devin-learning: {exc}", file=sys.stderr)
         return 3
+    if cursor is not None:
+        cursor.set("last_node_at", max(scan_watermark(args.sessions_db), since))
+        cursor.commit()
     report = build_report(args.sessions_db, verdicts, written=written)
     report_path = write_report(report, args.out)
     if args.json:
