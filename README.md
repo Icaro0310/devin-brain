@@ -223,6 +223,16 @@ devin-learning extract --sessions-db path/to/sessions.db --out .devin/skills --a
 drafts under `_rejected/`. The extractor reads session contents, so keep its
 output private until reviewed.
 
+For a shareable summary there is `weekly-report` — the public surface of the
+loop. It emits `weekly-YYYY-Www.md` with aggregate counts only (lessons by
+theme, promoted `learned-*` skills, quarantine-pending buckets): no session
+text, ids or paths, so the file is safe to commit. It resumes from the
+`devin-learning-weekly` cursor, falling back to the last `--days` (default 7).
+
+```bash
+devin-learning weekly-report --sessions-db path/to/sessions.db --out ./docs/learning
+```
+
 ## Memory states
 
 `active` · `proposed` (extracted, awaiting `approve`) · `quarantined`
