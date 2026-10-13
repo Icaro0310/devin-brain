@@ -195,6 +195,17 @@ VS Code ≥1.102) — launch command, optional `DEVIN_MEMORY_DB` and workspace
 `cwd` are declared there; the promotion opt-in is pinned off so the
 editor-facing server keeps its non-promoting surface.
 
+`adapters/` is a self-contained Devin plugin root
+(`adapters/.devin-plugin/plugin.json` + `adapters/skills/devin-brain/SKILL.md`),
+installed with
+`devin plugins install Icaro0310/devin-brain#adapters` — it ships in the
+repo, not inside the wheel. The manifest launches the server through
+`uvx --from 'devin-memory[mcp]' devin-memory-mcp`; the promotion
+opt-in (`DEVIN_MEMORY_MCP_PROMOTE`) is never set, so the plugin-facing
+server keeps its non-promoting surface. To run against a checkout
+instead of PyPI, point a local manifest copy at
+`uvx --from '.[mcp]' devin-memory-mcp`.
+
 ## Learn from sessions with `devin-learning`
 
 This companion CLI extracts candidate lessons from a `sessions.db` and writes
