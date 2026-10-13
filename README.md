@@ -249,10 +249,12 @@ quarantined content is never printed and never recalled.
   machine profile never prime (the profile defaults to `corporate` —
   fail-closed).
 - **`compact`** deduplicates: non-retracted entries sharing exact
-  `content` + `workspace` collapse to one survivor — the liveliest status
-  wins (`active` > `proposed` > `quarantined`), ties keep the oldest row.
-  The other copies become `retracted` (never deleted — history and reasons
-  stay auditable) and the survivor inherits the union of tags. Default is a
+  `content` + `workspace` + `profile` collapse to one survivor — the
+  liveliest status wins (`active` > `proposed` > `quarantined`), ties keep
+  the oldest row. The other copies become `retracted` (never deleted —
+  history and reasons stay auditable) and the survivor inherits the union
+  of tags from copies sharing its status — quarantined or proposed tags
+  never bleed into an active entry. Default is a
   dry-run report (live entries N→M, per-group `keep`/`retracted` ids,
   truncated content sha256 — never content); `--apply` executes and runs
   `VACUUM` on the file.

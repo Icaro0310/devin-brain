@@ -303,9 +303,9 @@ def build_server():
 
     @server.tool()
     def compact(apply: bool = False) -> dict:
-        """Deduplicate the store: same content+workspace live entries ->
-        one survivor, the rest retracted (never deleted). Dry-run unless
-        apply=True; apply also vacuums the file."""
+        """Deduplicate the store: same content+workspace+profile live
+        entries -> one survivor, the rest retracted (never deleted).
+        Dry-run unless apply=True; apply also vacuums the file."""
         return _guarded(do_compact)(apply)
 
     @server.tool()

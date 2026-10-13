@@ -83,17 +83,23 @@ def _cmd_extract(args: argparse.Namespace) -> int:
         cursor = Cursor("devin-learning-extract")
     since = args.since or (cursor.get("last_node_at", 0) if cursor else 0)
     try:
+        # Bound the scan before reading candidates: a node inserted during
+        # extraction gets a timestamp above this watermark and is picked up
+        # by the next incremental run instead of being skipped forever.
+        watermark = scan_watermark(args.sessions_db) if cursor is not None else 0
         candidates = extract_candidates(args.sessions_db, since=since)
         verdicts = review_candidates(candidates)
         written = emit_drafts(verdicts, args.out, apply=args.apply)
     except (SchemaError, LiveSkillsDirError, OSError) as exc:
         print(f"devin-learning: {exc}", file=sys.stderr)
         return 3
-    if cursor is not None:
-        cursor.set("last_node_at", max(scan_watermark(args.sessions_db), since))
-        cursor.commit()
     report = build_report(args.sessions_db, verdicts, written=written)
     report_path = write_report(report, args.out)
+    if cursor is not None:
+        # Commit only after the report is on disk — a failed run leaves the
+        # watermark untouched so a retry reproduces the same output.
+        cursor.set("last_node_at", max(watermark, since))
+        cursor.commit()
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=True))
     else:

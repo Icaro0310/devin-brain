@@ -641,8 +641,19 @@ def _apply_dedup(store: MemoryStore) -> list[dict[str, Any]]:
         members = sorted(members, key=lambda e: e.id)
         survivor = _dedup_survivor(members)
         drops = [e for e in members if e.id != survivor.id]
+        # Tags merge only across copies sharing the survivor's status —
+        # quarantined/proposed tags never bleed into an active survivor,
+        # so unreviewed metadata cannot reach recall through compact.
         merged_tags = _norm_tags(
-            [*survivor.tags, *(t for d in drops for t in d.tags)]
+            [
+                *survivor.tags,
+                *(
+                    t
+                    for d in drops
+                    if d.status == survivor.status
+                    for t in d.tags
+                ),
+            ]
         )
         if merged_tags != list(survivor.tags):
             store.set_tags(survivor.id, merged_tags)

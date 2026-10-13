@@ -89,6 +89,20 @@ def test_compact_prefers_active_survivor_over_quarantined(store):
     assert store.get(quarantined.id).status == "retracted"
 
 
+def test_compact_never_merges_tags_across_status(store):
+    """Unreviewed tags must not reach an active entry through dedup — a
+    quarantined/proposed copy's tags never bleed into the survivor."""
+    flagged = ops.retain(store, SECRET_FACT, tags=["poison-tag"])
+    released = ops.retain(store, SECRET_FACT, tags=["kept"])
+    ops.release(store, released.id)
+    assert flagged.status == "quarantined"
+    ops.compact(store, apply=True)
+    survivor = store.get(released.id)
+    assert survivor.status == "active"
+    assert "poison-tag" not in survivor.tags
+    assert "kept" in survivor.tags
+
+
 def test_compact_retracted_rows_do_not_group(store):
     old = ops.retain(store, CLEAN_FACT)
     ops.retract(store, old.id)
