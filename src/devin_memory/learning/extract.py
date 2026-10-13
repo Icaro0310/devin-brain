@@ -68,8 +68,14 @@ def _sentences(text: str) -> list[str]:
     return [s.strip() for s in _SENTENCE_SPLIT_RX.split(text) if s.strip()]
 
 
-def extract_candidates(db_path: str | Path) -> list[Candidate]:
+def extract_candidates(
+    db_path: str | Path, since: int = 0
+) -> list[Candidate]:
     """All lesson-shaped sentences from user messages, in store order.
+
+    ``since`` (epoch milliseconds) skips nodes created at or before the
+    watermark — the cursor leg of the incrementality spec
+    (devin-powerups/docs/incrementality.md).
 
     Raises:
         SchemaError: database missing, not a sessions.db, or an unknown /
@@ -78,6 +84,8 @@ def extract_candidates(db_path: str | Path) -> list[Candidate]:
     candidates: list[Candidate] = []
     with SessionsStore(db_path) as store:
         for node in store.message_nodes():
+            if since and int(node.created_at or 0) <= since:
+                continue
             payload = _message_payload(node.chat_message)
             if payload is None or _role_of(payload) not in _USER_ROLES:
                 continue
@@ -92,3 +100,14 @@ def extract_candidates(db_path: str | Path) -> list[Candidate]:
                         )
                     )
     return candidates
+
+
+def scan_watermark(db_path: str | Path) -> int:
+    """Max ``created_at`` over all message nodes — the "everything at or
+    below this line was scanned" watermark for cursor commits. Must cover
+    non-matching nodes too, otherwise they would rescan every run."""
+    with SessionsStore(db_path) as store:
+        return max(
+            (int(n.created_at or 0) for n in store.message_nodes()),
+            default=0,
+        )

@@ -46,3 +46,25 @@ def test_candidates_ordered_deterministically(sessions_db):
     first = [(c.session_id, c.node_id, c.text) for c in extract_candidates(sessions_db)]
     second = [(c.session_id, c.node_id, c.text) for c in extract_candidates(sessions_db)]
     assert first == second
+
+
+def test_since_filters_old_nodes(sessions_db):
+    all_c = extract_candidates(sessions_db)
+    assert all_c
+    times = sorted({c.created_at for c in all_c})
+    hi_water = times[-1]
+    # watermark above everything → nothing
+    assert extract_candidates(sessions_db, since=hi_water + 1) == []
+    # watermark at the max → every candidate is at-or-below → all excluded
+    assert extract_candidates(sessions_db, since=hi_water) == []
+    # watermark just below the newest → only strictly-newer candidates pass
+    below = extract_candidates(sessions_db, since=hi_water - 1)
+    assert below == [c for c in all_c if c.created_at == hi_water]
+    assert 0 < len(below) < len(all_c)
+
+
+def test_scan_watermark_covers_non_candidates(sessions_db):
+    from devin_memory.learning.extract import scan_watermark
+
+    wm = scan_watermark(sessions_db)
+    assert wm >= max(c.created_at for c in extract_candidates(sessions_db))
