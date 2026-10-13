@@ -6,6 +6,16 @@
 
 ## Unreleased (F4)
 
+- **`devin-learning weekly-report`** — new public surface of the learning
+  loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
+  dates, lesson counts by theme, promoted `learned-*` skill names,
+  quarantine-pending reason buckets). Unlike `REPORT.md` it carries no
+  session text, no session/node identifiers and no filesystem paths, so
+  it is safe to commit and share. Incremental via the shared
+  `devin-learning-weekly` cursor (`.devin/devin-learning-weekly-state.json`,
+  `DEVIN_CURSOR_DIR` override): since the last report, else the last
+  `--days` (default 7); `--since` overrides both. The report write is
+  atomic (tmp+replace) and the cursor commits only after it lands.
 - **`compact`** — new housekeeping subcommand: deduplicates non-retracted
   entries sharing exact `content`+`workspace` to one survivor (liveliest
   status wins, ties keep the oldest row), retracting the other copies —
