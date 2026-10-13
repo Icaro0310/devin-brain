@@ -1,6 +1,6 @@
 ---
 name: devin-brain
-description: "Durable, anti-poisoning memory for Devin: retain what was learned in a session and recall it when starting related work. Write path is gated — entries flagged as secret/injection land in quarantine automatically. Human review operations stay CLI-only."
+description: "Durable, anti-poisoning memory for Devin: retain what was learned in a session and recall it when starting related work. Write path is gated — entries flagged as secret/injection land in quarantine automatically. Promotion (release/approve) stays human-only via the CLI."
 triggers: [model, user]
 allowed-tools:
   - exec
@@ -31,10 +31,12 @@ you learned something durable (a decision, a gotcha, a convention).
 
 - Never `retain` secrets, tokens, or credentials — the gate will
   quarantine them anyway; do not try to bypass it.
-- Review operations are **not** part of this surface: `approve`,
-  `retract`, `supersede`, `quarantine`, `release` and `extract` stay
-  CLI-only, for a human to run deliberately (the plugin launches the
-  server with `--read-only`, so those tools are not even registered):
+- Promotion is **not** part of this surface: `release` and `approve`
+  are only registered when the server is launched with
+  `DEVIN_MEMORY_MCP_PROMOTE=1`, which this plugin never sets — an agent
+  cannot self-promote quarantined or proposed content, and `extract`'s
+  `auto_approve` is forced off. Review stays CLI-only, for a human to
+  run deliberately:
 
   ```bash
   devin-memory list --status proposed     # pending review

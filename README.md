@@ -6,7 +6,7 @@
 <a href="https://pypi.org/project/devin-memory/"><img src="https://img.shields.io/pypi/v/devin-memory" alt="PyPI"/></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/Icaro0310/devin-brain"><img src="https://api.scorecard.dev/projects/github.com/Icaro0310/devin-brain/badge" alt="OpenSSF Scorecard"/></a>
 <a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx" alt="M8ven Score"/></a>
-<a href="https://glama.ai/mcp/servers/Icaro0310/devin-memory"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-memory/badges/score.svg" alt="Glama Score"/></a>
+<a href="https://glama.ai/mcp/servers/Icaro0310/devin-brain"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-brain/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://mcpservers.org/servers/icaro0310/devin-memory"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"/></a>
 <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-blueviolet" alt="MCP Registry"/></a>
 
@@ -121,6 +121,7 @@ devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
 devin-memory quarantine                          # list with reasons
 devin-memory quarantine <id> [--reason manual:x] # mark entry as quarantined
 devin-memory quarantine --release <id>           # human override -> active
+devin-memory quarantine --digest [--json]        # audit hash (read-only)
 
 # Contradictions: a conflicting retain is linked, not overwritten
 devin-memory conflicts [--json]     # (newer, older) pairs; resolve with
@@ -141,6 +142,8 @@ devin-memory prime [--workspace PATH] [--max-tokens N]
 devin-memory supersede <id> "corrected fact"
 devin-memory retract <id>
 devin-memory list [--status active|proposed|quarantined|retracted] [--json]
+devin-memory compact [--json]   # dedup report (dry-run)
+devin-memory compact --apply    # retract copies + vacuum the file
 
 # Audit an entry's provenance against a real sessions.db (read-only)
 devin-memory verify <id> --sessions-db path/to/sessions.db
@@ -176,28 +179,32 @@ Client config:
 
 Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 `retract`, `supersede`, `quarantine`, `release`, `approve`, `conflicts`,
-`prime`, `verify`, `extract`. Every tool returns structured data or a
-`{"error", "detail"}` object — nothing raises through the transport.
-`DEVIN_MEMORY_DB` works as an alternative to `--db`.
+`prime`, `verify`, `extract`, `compact`, `quarantine_digest`. The `release`
+and `approve` promotion overrides are only registered when the server runs
+with `DEVIN_MEMORY_MCP_PROMOTE=1` — otherwise promotion stays human-only via
+the CLI (`devin-memory quarantine --release <id>` / `devin-memory approve
+<id>`). The same flag gates `extract`'s `auto_approve` parameter, which is
+forced off without the opt-in so an AI client cannot skip the review step.
+Every tool returns structured data or a `{"error", "detail"}`
+object — nothing raises through the transport. `DEVIN_MEMORY_DB` works as an
+alternative to `--db`.
 
-The server defaults to the gated read/write surface (`retain`, `recall`,
-`screen`, `list`, `conflicts`, `prime`, `verify`): the review ops
-(`retract`, `supersede`, `quarantine`, `release`, `approve`, `extract`)
-are not registered at all, so an agent can never self-release
-quarantined or proposed memory — those remain CLI-only for a human.
-Pass `--allow-review-ops` to opt in to the full surface (`--read-only`
-is still accepted for compatibility, is already the default, and wins
-over `--allow-review-ops` when both are passed).
+**VS Code:** `adapters/vscode/` ships an extension that registers this
+server with the editor's built-in MCP support (server definition provider,
+VS Code ≥1.102) — launch command, optional `DEVIN_MEMORY_DB` and workspace
+`cwd` are declared there; the promotion opt-in is pinned off so the
+editor-facing server keeps its non-promoting surface.
 
 `adapters/` is a self-contained Devin plugin root
 (`adapters/.devin-plugin/plugin.json` + `adapters/skills/devin-brain/SKILL.md`),
 installed with
 `devin plugins install Icaro0310/devin-brain#adapters` — it ships in the
 repo, not inside the wheel. The manifest launches the server through
-`uvx --from 'devin-memory[mcp]' devin-memory-mcp --read-only`, which
-resolves once the first PyPI release ships; until then run a
-source-installed `devin-memory-mcp` directly or point a local manifest
-copy at the checkout (`uvx --from '.[mcp]' devin-memory-mcp`).
+`uvx --from 'devin-memory[mcp]' devin-memory-mcp`; the promotion
+opt-in (`DEVIN_MEMORY_MCP_PROMOTE`) is never set, so the plugin-facing
+server keeps its non-promoting surface. To run against a checkout
+instead of PyPI, point a local manifest copy at
+`uvx --from '.[mcp]' devin-memory-mcp`.
 
 ## Learn from sessions with `devin-learning`
 
@@ -241,6 +248,20 @@ quarantined content is never printed and never recalled.
   only prime inside that workspace; entries written under a different
   machine profile never prime (the profile defaults to `corporate` —
   fail-closed).
+- **`compact`** deduplicates: non-retracted entries sharing exact
+  `content` + `workspace` collapse to one survivor — the liveliest status
+  wins (`active` > `proposed` > `quarantined`), ties keep the oldest row.
+  The other copies become `retracted` (never deleted — history and reasons
+  stay auditable) and the survivor inherits the union of tags. Default is a
+  dry-run report (live entries N→M, per-group `keep`/`retracted` ids,
+  truncated content sha256 — never content); `--apply` executes and runs
+  `VACUUM` on the file.
+- **`quarantine --digest`** prints a deterministic audit fingerprint of the
+  lane: entry count, reason buckets by taxonomy family (free-form manual
+  reasons collapse to `manual:*`), and a sha256 over the sorted per-entry
+  fingerprints `sha256(content)+sorted(reasons)`. Keyed on content, not row
+  ids — two stores holding the same quarantined facts digest identically,
+  and any membership or reason change moves it. Always read-only.
 
 The store is `./memory.db` by default — override with `--db` or
 `DEVIN_MEMORY_DB`. It is the only store this tool writes to; Devin's

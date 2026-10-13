@@ -15,9 +15,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from devin_memory import identity
 
@@ -183,6 +184,46 @@ class MemoryStore:
 
     # -- writes --------------------------------------------------------------
 
+    @contextmanager
+    def _unit(self) -> Iterator[None]:
+        """Scope of one write unit.
+
+        A standalone write self-commits (each helper stays atomic on its
+        own); inside :meth:`transaction` it joins the open transaction
+        instead, so a compound caller commits once at the end — never
+        midway through a multi-step update.
+        """
+        if self._con.in_transaction:
+            yield
+        else:
+            with self._con:
+                yield
+
+    @contextmanager
+    def transaction(self) -> Iterator[MemoryStore]:
+        """Hold one ``IMMEDIATE`` write transaction across operations.
+
+        The write helpers (:meth:`insert`, :meth:`set_status`,
+        :meth:`set_tags`, :meth:`set_quarantine_reasons`,
+        :meth:`supersede`) join the open transaction instead of
+        committing per call; the block commits once on clean exit and
+        rolls back on error. ``BEGIN IMMEDIATE`` takes the write lock up
+        front, so a read-modify-write (e.g. ``compact --apply``) cannot
+        race another writer between planning and mutating. ``VACUUM``
+        cannot run inside it — call :meth:`vacuum` after the block.
+        """
+        if self._con.in_transaction:
+            yield self  # nested call: join the outer transaction
+            return
+        self._con.execute("BEGIN IMMEDIATE")
+        try:
+            yield self
+        except BaseException:
+            self._con.rollback()
+            raise
+        else:
+            self._con.commit()
+
     def insert(
         self,
         content: str,
@@ -206,7 +247,7 @@ class MemoryStore:
             machine_id = machine_id if machine_id is not None else prov["machine_id"]
             profile = profile if profile is not None else prov["profile"]
         created_at = int(time.time() * 1000)
-        with self._con:
+        with self._unit():
             cur = self._con.execute(
                 "INSERT INTO entries(content, tags, source_session_id,"
                 " source_rowid, created_at, status, version, supersedes_id,"
@@ -236,7 +277,7 @@ class MemoryStore:
     def set_status(self, entry_id: int, status: str) -> None:
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}")
-        with self._con:
+        with self._unit():
             self._con.execute(
                 "UPDATE entries SET status = ? WHERE id = ?",
                 (status, entry_id),
@@ -246,11 +287,36 @@ class MemoryStore:
         self, entry_id: int, reasons: Iterable[str]
     ) -> None:
         """Replace the reasons list on a row (used by manual quarantine)."""
-        with self._con:
+        with self._unit():
             self._con.execute(
                 "UPDATE entries SET quarantine_reasons = ? WHERE id = ?",
                 (json.dumps(list(reasons)), entry_id),
             )
+
+    def set_tags(self, entry_id: int, tags: Iterable[str]) -> None:
+        """Replace the tags list on a row (used by ``compact`` merges)."""
+        with self._unit():
+            self._con.execute(
+                "UPDATE entries SET tags = ? WHERE id = ?",
+                (json.dumps(list(tags)), entry_id),
+            )
+
+    # -- maintenance -----------------------------------------------------------
+
+    def freelist_bytes(self) -> int:
+        """Bytes sitting on SQLite's free page list — what ``VACUUM``
+        could reclaim (an estimate; index pages also compact)."""
+        pages = self._con.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = self._con.execute("PRAGMA page_size").fetchone()[0]
+        return int(pages) * int(page_size)
+
+    def vacuum(self) -> None:
+        """Rebuild the database file in place, reclaiming free pages.
+
+        Runs outside a transaction (SQLite requirement); rows are never
+        rewritten semantically — this is pure file compaction.
+        """
+        self._con.execute("VACUUM")
 
     def supersede(
         self,
@@ -279,7 +345,7 @@ class MemoryStore:
         if workspace is None:
             workspace = old.workspace  # successors keep the same scope
         created_at = int(time.time() * 1000)
-        with self._con:
+        with self._unit():
             self._con.execute(
                 "UPDATE entries SET status = 'retracted' WHERE id = ?",
                 (old_id,),

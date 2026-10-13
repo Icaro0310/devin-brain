@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devin-memory"
-version = "0.3.0"
+version = "0.3.1"
 description = "Anti-poisoning memory layer for Devin — reviewed, versioned, provenance-tracked durable memory."
 readme = "README.md"
 license = { text = "MIT" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{ name = "Icaro0310" }]
 dependencies = [
     "devin-redact>=0.2.0",
-    "devin-internals-spec>=0.3.0",
+    "devin-internals-spec>=0.3.1",
 ]
 
 [project.optional-dependencies]

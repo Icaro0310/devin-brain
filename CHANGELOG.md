@@ -1,15 +1,57 @@
 # Changelog
 
+## 0.3.1
+
+- `__version__` now matches the published artifact: the 0.3.0 wheel on PyPI self-reports 0.1.0 (built before the version sync landed). This release exists so the index carries a wheel whose metadata and self-report agree.
+
 ## Unreleased (F4)
 
-- **MCP** — `devin-memory-mcp` now defaults to the gated read/write
-  surface and omits the review ops (`retract`, `supersede`, `quarantine`,
-  `release`, `approve`, `extract`); `--allow-review-ops` opts in to the
-  full surface, `--read-only` stays accepted for compatibility.
-  Quarantined/proposed memory can only reach `active` via the human
-  CLI — an agent can never self-release unreviewed memory.
+- **`compact`** — new housekeeping subcommand: deduplicates non-retracted
+  entries sharing exact `content`+`workspace` to one survivor (liveliest
+  status wins, ties keep the oldest row), retracting the other copies —
+  rows are never deleted, so provenance stays auditable. Dry-run by
+  default (`--apply` executes and `VACUUM`s the file); the report shows
+  live N→M, per-group keep/retract ids and truncated content sha256 —
+  never content. Also exposed as the `compact` MCP tool.
+- **`quarantine --digest`** — read-only audit fingerprint of the
+  quarantine lane: count, reason buckets by taxonomy family (manual
+  reasons aggregate to `manual:*`), and sha256 over sorted per-entry
+  fingerprints `sha256(content)+sorted(reasons)`. Content-keyed, so the
+  same quarantined set digests identically across machines; any
+  membership/reason change moves it. Also exposed as the
+  `quarantine_digest` MCP tool.
+
+- **MCP promotion gate** — the `release` and `approve` tools are no
+  longer registered by default: they only appear when the server is
+  launched with `DEVIN_MEMORY_MCP_PROMOTE=1`, so an AI-driven MCP client
+  cannot self-promote quarantined or proposed content past the review
+  lane. `extract`'s `auto_approve` parameter is also forced off without
+  the opt-in. Promotion stays human-only via `devin-memory quarantine
+  --release <id>` and `devin-memory approve <id>`.
+
+- **VS Code adapter** (`adapters/vscode/`) — registers `devin-memory`
+  with the editor's MCP support via the server definition provider API
+  (VS Code ≥1.102). Server env is built from scratch with the promotion
+  flag pinned off, `cwd` is anchored to the workspace folder so the
+  default `./memory.db` lands in the project, and definition changes
+  (settings/workspace folders) re-collect via
+  `onDidChangeMcpServerDefinitions`. Pins `devin-memory-mcp
+  >=0.3.1,<0.4.0`; contract tests keep pin, bounds and packaged version
+  in sync at patch level.
+- **Docs** — corporate-windows guide: Zscaler root export now requires PEM ("Base-64 encoded X.509" wizard option or `certutil -encode` after `Export-Certificate`, which emits DER) and distinguishes `certmgr.msc` (Current User store) from `certlm.msc` (Local Machine store); the offline recipe installs `setuptools`+`wheel` before `--no-build-isolation`.
+- **Docs** — platform guides regenerated (Zscaler section, per-package local-runtime bullet, scheduled extract with explicit `--db`/`--sessions-db`); `mcp-name` kept as `io.github.Icaro0310/devin-memory` to match the published MCP registry identity.
+- **Docs** — scheduled job now uses a `.cmd` wrapper under `%USERPROFILE%\devin-tasks` registered via `Register-ScheduledTask`, quoting-safe in cmd.exe and PowerShell and not writable by other local users. The wrapper prepends `%USERPROFILE%\.local\bin` to `PATH`, registration uses `-Force`, and the logon trigger is pinned with `-User $env:USERNAME`.
+- **Devin plugin adapter** (`adapters/`) — self-contained Devin plugin
+  root: `.devin-plugin/plugin.json` launches `devin-memory-mcp` via
+  `uvx --from 'devin-memory[mcp]'` (promotion opt-in stays off) and
+  `skills/devin-brain/SKILL.md` teaches the agent the memory surface —
+  `retain`/`recall`/`screen`/`list`/`conflicts`/`prime`/`verify` —
+  while `release`/`approve` promotion stays human-only via the CLI.
+  Ships in the repo, not the wheel: `devin plugins install
+  Icaro0310/devin-brain#adapters`. Contract tests pin the manifest,
+  the skill frontmatter and the no-promotion-ops surface.
 - **Docs** — refreshed the generated `Part of the DEVIN ecosystem` block: journey recuration v2 (six paths, zero repeats, `Local-first ops` label, `devin-bridge` in DevOps).
-- **Docs** — ecosystem journey recuration recorded (six curated audiences; this product's ai-engineers and data-scientists paths were already regenerated).
+- **Docs** — ecosystem journey recuration recorded (six curated audiences); v2 zero-repeats keeps only this product's AI engineers path — Data Scientists moved to the devin-graph → devin-search → devin-history → devin-metrics chain.
 - **Docs** — README gains the generated `Part of the DEVIN ecosystem` block
   (track/nature/audience/interface rendered from the registry).
 
@@ -50,6 +92,12 @@
 - `llms.txt` no longer states a hard-coded ecosystem size; the registry owns the count.
 
 - **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
+- **Fix** — `devin_memory.learning.__version__` is now the submodule's own version (synced with the package release) instead of the root `devin_memory.__version__`; it drives `devin-learning --version` and the `version` field in extract/review reports. Corrects the 0.3.0 note that attributed those outputs to the root module.
+
+## 0.3.0
+
+- **Fix** — `devin_memory.__version__` now reports the package version (was stale at `0.1.0` while `pyproject.toml` declared `0.3.0`); drives `devin-learning --version` and report metadata.
+- **CI** — the PyPI publish workflow now verifies the built wheel's self-reported `__version__` against `pyproject.toml` before upload (installed with `--no-deps`, so workspace siblings not yet on PyPI cannot block a valid wheel).
 
 ## 0.2.0
 

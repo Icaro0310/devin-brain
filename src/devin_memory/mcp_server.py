@@ -10,12 +10,23 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
 - ``retract``     withdraw an entry (kept for history)
 - ``supersede``   replace an entry with a corrected version
 - ``quarantine``  move an entry to the quarantine lane
-- ``release``     human override: quarantined -> active
-- ``approve``     promote a proposed extraction to active
+- ``release``     human override: quarantined -> active (opt-in, below)
+- ``approve``     promote a proposed extraction to active (opt-in, below)
 - ``conflicts``   contradiction pairs linked at retain time
 - ``prime``       compact recalled-context block for a workspace
 - ``verify``      audit an entry's provenance against a sessions.db
 - ``extract``     mine a session into proposed entries
+- ``compact``     dedup live entries (dry-run unless ``apply``)
+- ``quarantine_digest``  deterministic audit hash of the quarantine lane
+
+``release`` and ``approve`` are promotion overrides — they are only
+registered when the operator launches the server with
+``DEVIN_MEMORY_MCP_PROMOTE=1``, so an AI-driven client cannot
+self-promote quarantined or proposed content past the anti-poisoning
+lane. The same flag also gates ``extract``'s ``auto_approve``
+parameter, which would otherwise bypass the review step. Humans use
+``devin-memory quarantine --release ID`` and ``devin-memory approve ID``
+directly.
 
 The DB is ``./memory.db`` by default — ``--db PATH`` or the
 ``DEVIN_MEMORY_DB`` env var override it, exactly like the CLI.
@@ -152,6 +163,16 @@ def do_extract(sessions_db: str, session_id: str = "",
         )
 
 
+def do_compact(apply: bool = False) -> dict:
+    with _store() as store:
+        return ops.compact(store, apply=apply)
+
+
+def do_quarantine_digest() -> dict:
+    with _store() as store:
+        return ops.quarantine_digest(store)
+
+
 # ---------------------------------------------------------------------------
 # MCP server
 # ---------------------------------------------------------------------------
@@ -185,14 +206,16 @@ def _guarded(fn):
     return wrapper
 
 
-def build_server(read_only: bool = True):
-    """Build the MCP server. The default ``read_only`` omits the
-    review/mutation ops (retract, supersede, quarantine, release,
-    approve, extract): quarantined/proposed memory can only reach
-    ``active`` through the human CLI, so an agent can never self-release
-    unreviewed memory. ``read_only=False`` restores the full surface —
-    deliberate, opt-in use only.
-    """
+def _promotion_enabled() -> bool:
+    """``release``/``approve`` are human overrides: they only register
+    when the operator opts in via ``DEVIN_MEMORY_MCP_PROMOTE=1`` in the
+    server environment — an AI-driven MCP client must not be able to
+    self-promote content past the quarantine lane. Read at server-build
+    time so the env the server is launched with decides."""
+    return os.environ.get("DEVIN_MEMORY_MCP_PROMOTE") == "1"
+
+
+def build_server():
     server = _make_app("devin-memory")
 
     @server.tool()
@@ -223,22 +246,24 @@ def build_server(read_only: bool = True):
         quarantined, retracted)."""
         return _guarded(do_list)(status, limit)
 
-    if not read_only:
+    @server.tool()
+    def retract(entry_id: int) -> dict:
+        """Withdraw an entry — kept for history, never recalled again."""
+        return _guarded(do_retract)(entry_id)
 
-        @server.tool()
-        def retract(entry_id: int) -> dict:
-            """Withdraw an entry — kept for history, never recalled."""
-            return _guarded(do_retract)(entry_id)
+    @server.tool()
+    def supersede(entry_id: int, content: str, tags: str = "") -> dict:
+        """Replace an entry with a corrected version (versioned)."""
+        return _guarded(do_supersede)(entry_id, content, tags)
 
-        @server.tool()
-        def supersede(entry_id: int, content: str, tags: str = "") -> dict:
-            """Replace an entry with a corrected version (versioned)."""
-            return _guarded(do_supersede)(entry_id, content, tags)
+    @server.tool()
+    def quarantine(entry_id: int, reason: str = "") -> dict:
+        """Move an entry to the quarantine lane (review hold)."""
+        return _guarded(do_quarantine)(entry_id, reason)
 
-        @server.tool()
-        def quarantine(entry_id: int, reason: str = "") -> dict:
-            """Move an entry to the quarantine lane (review hold)."""
-            return _guarded(do_quarantine)(entry_id, reason)
+    # Human overrides — gated: absent unless the operator opts in, so an
+    # AI client cannot promote content past the quarantine lane.
+    if _promotion_enabled():
 
         @server.tool()
         def release(entry_id: int) -> dict:
@@ -267,16 +292,27 @@ def build_server(read_only: bool = True):
         (read-only)."""
         return _guarded(do_verify)(entry_id, sessions_db)
 
-    if not read_only:
+    @server.tool()
+    def extract(sessions_db: str, session_id: str = "",
+                latest: bool = False, auto_approve: bool = False) -> dict:
+        """Mine a Devin session (read-only sessions.db) for durable
+        knowledge -> proposed entries awaiting approve."""
+        return _guarded(do_extract)(
+            sessions_db, session_id, latest,
+            auto_approve and _promotion_enabled())
 
-        @server.tool()
-        def extract(sessions_db: str, session_id: str = "",
-                    latest: bool = False, auto_approve: bool = False
-                    ) -> dict:
-            """Mine a Devin session (read-only sessions.db) for durable
-            knowledge -> proposed entries awaiting approve."""
-            return _guarded(do_extract)(
-                sessions_db, session_id, latest, auto_approve)
+    @server.tool()
+    def compact(apply: bool = False) -> dict:
+        """Deduplicate the store: same content+workspace live entries ->
+        one survivor, the rest retracted (never deleted). Dry-run unless
+        apply=True; apply also vacuums the file."""
+        return _guarded(do_compact)(apply)
+
+    @server.tool()
+    def quarantine_digest() -> dict:
+        """Deterministic sha256 audit digest of the quarantine lane —
+        count + taxonomy reason buckets + set hash, no content."""
+        return _guarded(do_quarantine_digest)()
 
     return server
 
@@ -290,26 +326,11 @@ def main() -> None:
     parser.add_argument("--db", metavar="PATH",
                         help="memory.db path (default: ./memory.db or "
                              "$DEVIN_MEMORY_DB)")
-    parser.add_argument("--read-only", action="store_true",
-                        help="kept for compatibility — read-only is the "
-                             "default; review ops (approve/retract/"
-                             "supersede/quarantine/release/extract) "
-                             "stay CLI-only")
-    parser.add_argument("--allow-review-ops", action="store_true",
-                        help="opt-in: also register the review/mutation "
-                             "ops (retract/supersede/quarantine/release/"
-                             "approve/extract). Deliberate use only.")
     args = parser.parse_args()
     if args.db:
         _DB_PATH = args.db
-    # An explicit --read-only wins over --allow-review-ops: ambiguous
-    # invocations resolve to the restrictive surface.
-    read_only = args.read_only or not args.allow_review_ops
-    if args.read_only and args.allow_review_ops:
-        print("note: --read-only wins over --allow-review-ops; review ops "
-              "stay unregistered", file=sys.stderr)
     try:
-        build_server(read_only=read_only).run()
+        build_server().run()
     except ImportError as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

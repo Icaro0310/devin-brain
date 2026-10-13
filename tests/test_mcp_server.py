@@ -77,61 +77,92 @@ def test_prime_returns_bounded_text(db):
     assert "remember this for prime" in out["text"]
 
 
-def test_build_server_full_surface_is_opt_in():
-    pytest.importorskip("mcp")
-    server = mcp_srv.build_server(read_only=False)
+def test_compact_dry_run_then_apply(db):
+    mcp_srv.do_retain("duplicated memory fact")
+    mcp_srv.do_retain("duplicated memory fact")
+    plan = mcp_srv.do_compact()
+    assert plan["dry_run"] is True
+    assert plan["duplicate_entries"] == 1
+    assert len(mcp_srv.do_list(status="active")) == 2  # nothing changed
+    applied = mcp_srv.do_compact(apply=True)
+    assert applied["dry_run"] is False
+    assert len(mcp_srv.do_list(status="active")) == 1
+
+
+def test_quarantine_digest_is_stable_and_content_free(db):
+    mcp_srv.do_retain("sk-" + "C" * 24)
+    first = mcp_srv.do_quarantine_digest()
+    assert first == mcp_srv.do_quarantine_digest()
+    assert first["count"] == 1
+    assert "sk-" not in str(first)
+
+
+def _registered_tool_names(server) -> set:
     manager = getattr(server, "_tool_manager", None)
-    names = set(getattr(manager, "_tools", {}) or {})
+    return set(getattr(manager, "_tools", {}) or {})
+
+
+def test_build_server_registers_tools(monkeypatch):
+    pytest.importorskip("mcp")
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    names = _registered_tool_names(mcp_srv.build_server())
     expected = {"retain", "recall", "screen", "list", "retract",
-                "supersede", "quarantine", "release", "approve",
-                "conflicts", "prime", "verify", "extract"}
+                "supersede", "quarantine", "conflicts", "prime",
+                "verify", "extract", "compact", "quarantine_digest"}
     assert expected <= names
 
 
-def test_build_server_default_is_read_only():
-    """The default build hides review ops — mutation is opt-in, not
-    opt-out, so a client that just launches the server can never
-    self-release quarantined or proposed memory."""
+def test_promotion_tools_hidden_by_default(monkeypatch):
+    """``release``/``approve`` are human overrides — absent from the MCP
+    surface unless the operator opts in, so an AI client cannot
+    self-promote quarantined or proposed content."""
     pytest.importorskip("mcp")
-    server = mcp_srv.build_server()
-    manager = getattr(server, "_tool_manager", None)
-    names = set(getattr(manager, "_tools", {}) or {})
-    review_ops = {"retract", "supersede", "quarantine", "release",
-                  "approve", "extract"}
-    assert not review_ops & names
-    assert {"retain", "recall", "screen", "list", "conflicts",
-            "prime", "verify"} <= names
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    names = _registered_tool_names(mcp_srv.build_server())
+    assert "release" not in names
+    assert "approve" not in names
+    assert "retain" in names  # the rest of the surface is unchanged
 
 
-def _capture_build_server(monkeypatch):
-    captured = {}
-
-    class _FakeServer:
-        def run(self):
-            pass
-
-    def _fake_build(read_only=True):
-        captured["read_only"] = read_only
-        return _FakeServer()
-
-    monkeypatch.setattr(mcp_srv, "build_server", _fake_build)
-    return captured
+def test_promotion_tools_opt_in_registers_them(monkeypatch):
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("DEVIN_MEMORY_MCP_PROMOTE", "1")
+    names = _registered_tool_names(mcp_srv.build_server())
+    assert {"release", "approve"} <= names
 
 
-def test_main_read_only_wins_over_allow_review_ops(monkeypatch):
-    """An explicit --read-only combined with --allow-review-ops resolves
-    to the restrictive surface, not the full one."""
-    captured = _capture_build_server(monkeypatch)
-    monkeypatch.setattr(
-        sys, "argv",
-        ["devin-memory-mcp", "--read-only", "--allow-review-ops"])
-    mcp_srv.main()
-    assert captured["read_only"] is True
+def _extract_tool(server):
+    return server._tool_manager._tools["extract"].fn
 
 
-def test_main_allow_review_ops_alone_opens_surface(monkeypatch):
-    captured = _capture_build_server(monkeypatch)
-    monkeypatch.setattr(
-        sys, "argv", ["devin-memory-mcp", "--allow-review-ops"])
-    mcp_srv.main()
-    assert captured["read_only"] is False
+def test_extract_auto_approve_masked_without_opt_in(monkeypatch, db):
+    """An AI client passing ``auto_approve=True`` must not bypass the
+    review lane: without ``DEVIN_MEMORY_MCP_PROMOTE=1`` the tool forces
+    the flag off before it reaches ``ops.extract_session``."""
+    pytest.importorskip("mcp")
+    monkeypatch.delenv("DEVIN_MEMORY_MCP_PROMOTE", raising=False)
+    seen = {}
+
+    def spy(store, sessions_db, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(mcp_srv.ops, "extract_session", spy)
+    tool = _extract_tool(mcp_srv.build_server())
+    tool(sessions_db="sessions.db", auto_approve=True)
+    assert seen["auto_approve"] is False
+
+
+def test_extract_auto_approve_honored_with_opt_in(monkeypatch, db):
+    pytest.importorskip("mcp")
+    monkeypatch.setenv("DEVIN_MEMORY_MCP_PROMOTE", "1")
+    seen = {}
+
+    def spy(store, sessions_db, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(mcp_srv.ops, "extract_session", spy)
+    tool = _extract_tool(mcp_srv.build_server())
+    tool(sessions_db="sessions.db", auto_approve=True)
+    assert seen["auto_approve"] is True
