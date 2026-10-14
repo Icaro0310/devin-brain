@@ -25,6 +25,17 @@
     "agent"
   ],
   "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "restrictedConfigurations": [
+        "devinMemory.executable",
+        "devinMemory.args",
+        "devinMemory.dbPath"
+      ],
+      "description": "Launches the user-installed devin-memory MCP server. In Restricted Mode the workspace-configured executable, args and dbPath are ignored; the server resolves from PATH with built-in defaults and its database lives in extension storage, not the workspace."
+    }
+  },
   "contributes": {
     "mcpServerDefinitionProviders": [
       {

@@ -10,7 +10,14 @@
 // server. The promotion overrides (release/approve) stay gated behind the
 // human opt-in — src/devin_memory/mcp_server.py::_promotion_enabled.
 
+const fs = require("fs");
 const vscode = require("vscode");
+// Shared Restricted-Mode-safe executable resolver — byte-identical copy of
+// devin-powerups' adapters/shared/safe-executable.cjs (lockstep enforced by
+// config-restricted-check). On Windows, CreateProcess searches cwd before
+// PATH: the definition must carry the absolute path this returns — with it,
+// the workspace cwd assigned below stays inert.
+const { resolveSafeExecutable } = require("./safe-executable.cjs");
 
 // Contract with the devin-memory-mcp dist (packaging/devin-memory-mcp).
 // Keep in sync with the "devin-memory-mcp" range in package.json —
@@ -34,6 +41,14 @@ function workspaceUri() {
   return folders && folders.length ? folders[0].uri : undefined;
 }
 
+// Every open workspace root — in Restricted Mode the resolver rejects a
+// candidate that resolves inside ANY of them, so a binary planted in a
+// secondary root of a multi-root workspace cannot win either.
+function workspaceDirPaths() {
+  const folders = vscode.workspace.workspaceFolders;
+  return (folders || []).map((f) => f.uri && f.uri.fsPath).filter(Boolean);
+}
+
 // The env the server is launched with — built from scratch so nothing is
 // inherited: DEVIN_MEMORY_DB only when configured, and the promotion gate
 // explicitly off so release/approve never reach an AI client.
@@ -44,18 +59,57 @@ function serverEnv() {
   return env;
 }
 
+// Extension-managed storage, captured at activate() — the server cwd in
+// untrusted workspaces, so its default ./memory.db can never be supplied
+// by the repo under review.
+let storageUri;
+
 function provideMcpServerDefinitions() {
   const { executable, args } = config();
+  const wsUri = workspaceUri();
+  // Resolve BEFORE handing the command to VS Code: a bare name spawned
+  // under a workspace cwd would run a binary planted inside an untrusted
+  // repo (CreateProcess searches cwd first on Windows). In Restricted
+  // Mode the helper also rejects candidates resolving inside ANY
+  // workspace root.
+  const spec = resolveSafeExecutable(executable, {
+    workspaceDirs: workspaceDirPaths(),
+    trusted: vscode.workspace.isTrusted,
+    npmPackage: null,
+  });
+  if (!spec) {
+    throw new Error(
+      "devin-memory-mcp not found on PATH. Install it " +
+      "(pipx install devin-memory-mcp) or set devinMemory.executable.");
+  }
   // The ctor is (label, command, args?, env?, version?) — cwd is a writable
-  // Uri property on the definition, not a constructor argument. Assign it
-  // so the server's default ./memory.db lands inside the workspace.
+  // Uri property on the definition, not a constructor argument. Trusted:
+  // anchor to the workspace so ./memory.db lands in the project. Untrusted:
+  // anchor to extension storage — the repo must not control the memory DB
+  // (nor the cwd a bare-name spawn searches first on Windows).
   const def = new vscode.McpStdioServerDefinition(
-    "devin-memory (devin-brain)", executable, args, serverEnv());
-  def.cwd = workspaceUri();
+    "devin-memory (devin-brain)", spec.file, spec.argv.concat(args), serverEnv());
+  if (vscode.workspace.isTrusted) {
+    def.cwd = wsUri;
+  } else {
+    // Fresh installs may not have the global storage directory yet and a
+    // process cannot spawn into a nonexistent cwd — create it before the
+    // first restricted launch writes ./memory.db there. If creation
+    // fails the spawn surfaces the OS error itself.
+    if (storageUri) {
+      try {
+        fs.mkdirSync(storageUri.fsPath, { recursive: true });
+      } catch {
+        // leave the failure to the spawn's own error report
+      }
+    }
+    def.cwd = storageUri;
+  }
   return [def];
 }
 
 function activate(context) {
+  storageUri = context.globalStorageUri;
   const emitter = new vscode.EventEmitter();
   context.subscriptions.push(
     emitter,
@@ -77,5 +131,6 @@ function deactivate() {}
 module.exports = { activate, deactivate };
 // Test-only surface — pure internals reachable without the editor.
 module.exports.__internals__ = {
-  COMPATIBLE_CLI, PROVIDER_ID, serverEnv, workspaceUri, provideMcpServerDefinitions,
+  COMPATIBLE_CLI, PROVIDER_ID, serverEnv, workspaceUri, workspaceDirPaths,
+  provideMcpServerDefinitions,
 };

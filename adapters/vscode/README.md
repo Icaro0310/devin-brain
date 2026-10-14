@@ -32,8 +32,12 @@ stdio definition:
 - **args**: `devinMemory.args` (default `[]`)
 - **env**: built from scratch — `DEVIN_MEMORY_DB` only when
   `devinMemory.dbPath` is set
-- **cwd**: the first workspace folder's `Uri` (assigned on the definition,
-  so the server's default `./memory.db` lands in the project)
+- **cwd**: trusted workspaces get the first folder's `Uri` (so the
+  server's default `./memory.db` lands in the project). In Restricted
+  Mode it's the extension's global storage —
+  `User/globalStorage/icaro0310.devin-memory/` under the VS Code
+  user-data directory, created on first launch — so an untrusted repo
+  can neither supply the database nor write next to it.
 
 **Safety**: `DEVIN_MEMORY_MCP_PROMOTE` is pinned to `"0"` — even if the
 editor's ambient environment carries the opt-in, the server never sees it.
@@ -50,7 +54,7 @@ definition instead of launching a stale one.
 | --- | --- | --- |
 | `devinMemory.executable` | `devin-memory-mcp` | Server executable |
 | `devinMemory.args` | `[]` | Executable arguments |
-| `devinMemory.dbPath` | `""` | `DEVIN_MEMORY_DB` (empty = `./memory.db` under the workspace folder) |
+| `devinMemory.dbPath` | `""` | `DEVIN_MEMORY_DB` (empty = `./memory.db` under the launch cwd: workspace folder when trusted, extension global storage in Restricted Mode) |
 
 ## Development
 
