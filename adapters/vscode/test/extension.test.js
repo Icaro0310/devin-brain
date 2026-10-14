@@ -90,7 +90,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 test("activate registers provider + emitter + change listeners", () => {
-  const context = { subscriptions: [] };
+  const context = { subscriptions: [], globalStorageUri: { fsPath: "/ext-storage" } };
   ext.activate(context);
   assert.strictEqual(registered.length, 1);
   assert.strictEqual(registered[0].id, "devin-memory");
@@ -188,6 +188,33 @@ test("the workspace trust state is forwarded to the resolver", () => {
   } finally {
     isTrusted = true;
   }
+});
+
+test("manifest declares limited untrusted-workspace support", () => {
+  const manifest = JSON.parse(
+    require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "..", "package.json"), "utf8"),
+  );
+  const uw = manifest.capabilities.untrustedWorkspaces;
+  assert.strictEqual(uw.supported, "limited");
+  assert.deepStrictEqual(uw.restrictedConfigurations.sort(), [
+    "devinMemory.args",
+    "devinMemory.dbPath",
+    "devinMemory.executable",
+  ]);
+});
+
+test("untrusted workspace: cwd is extension storage, not the repo", () => {
+  settings = {};
+  const uri = { fsPath: "/repo" };
+  folders = [{ uri }];
+  isTrusted = false;
+  const defs = __internals__.provideMcpServerDefinitions();
+  assert.deepStrictEqual(defs[0].cwd, { fsPath: "/ext-storage" });
+  assert.notStrictEqual(defs[0].cwd, uri);
+  isTrusted = true;
+  const trusted = __internals__.provideMcpServerDefinitions();
+  assert.strictEqual(trusted[0].cwd, uri);
 });
 
 test("devinMemory config change fires onDidChangeMcpServerDefinitions", () => {

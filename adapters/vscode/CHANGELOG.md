@@ -2,6 +2,15 @@
 
 ## [0.1.0]
 
+### Security
+
+- Declared `capabilities.untrustedWorkspaces` (`supported: "limited"`)
+  with `restrictedConfigurations` covering `devinMemory.executable`,
+  `devinMemory.args` and `devinMemory.dbPath`; in Restricted Mode the
+  MCP server's `cwd` is anchored to extension storage instead of the
+  workspace, so an untrusted repository can no longer supply the default
+  `./memory.db` returned by MCP recall.
+
 ### Added
 
 - MCP server definition provider (`devin-memory`) registering the

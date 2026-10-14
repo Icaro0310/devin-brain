@@ -50,6 +50,11 @@ function serverEnv() {
   return env;
 }
 
+// Extension-managed storage, captured at activate() — the server cwd in
+// untrusted workspaces, so its default ./memory.db can never be supplied
+// by the repo under review.
+let storageUri;
+
 function provideMcpServerDefinitions() {
   const { executable, args } = config();
   const wsUri = workspaceUri();
@@ -68,15 +73,18 @@ function provideMcpServerDefinitions() {
       "(pipx install devin-memory-mcp) or set devinMemory.executable.");
   }
   // The ctor is (label, command, args?, env?, version?) — cwd is a writable
-  // Uri property on the definition, not a constructor argument. Assign it
-  // so the server's default ./memory.db lands inside the workspace.
+  // Uri property on the definition, not a constructor argument. Trusted:
+  // anchor to the workspace so ./memory.db lands in the project. Untrusted:
+  // anchor to extension storage — the repo must not control the memory DB
+  // (nor the cwd a bare-name spawn searches first on Windows).
   const def = new vscode.McpStdioServerDefinition(
     "devin-memory (devin-brain)", spec.file, spec.argv.concat(args), serverEnv());
-  def.cwd = wsUri;
+  def.cwd = vscode.workspace.isTrusted ? wsUri : storageUri;
   return [def];
 }
 
 function activate(context) {
+  storageUri = context.globalStorageUri;
   const emitter = new vscode.EventEmitter();
   context.subscriptions.push(
     emitter,
