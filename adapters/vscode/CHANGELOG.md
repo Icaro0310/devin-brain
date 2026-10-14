@@ -10,6 +10,13 @@
   MCP server's `cwd` is anchored to extension storage instead of the
   workspace, so an untrusted repository can no longer supply the default
   `./memory.db` returned by MCP recall.
+- `safe-executable` hardening: PATH candidates are `realpath`'d before
+  the inside-workspace check (a PATH entry symlinked into the repo no
+  longer evades it), every workspace root is rejected in Restricted
+  Mode rather than only the first (multi-root), and `%dp0%`-style npm
+  shims resolve alongside `%~dp0`. The restricted-mode storage
+  directory is created on first launch so a fresh install's missing
+  global storage can no longer break the spawn.
 
 ### Added
 

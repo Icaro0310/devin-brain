@@ -3,6 +3,12 @@
 // Minimal vscode stub injected before requiring the extension — captures
 // the registered provider, records McpStdioServerDefinition instances,
 // and lets tests fire configuration/workspace-folder changes.
+const os = require("node:os");
+const path = require("node:path");
+
+// Real dir under the OS temp dir: the restricted-mode launch mkdir's it.
+const STORAGE_DIR = path.join(os.tmpdir(), "devin-brain-ext-storage");
+
 let settings = {};
 let folders = [];
 let isTrusted = true;
@@ -90,7 +96,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 test("activate registers provider + emitter + change listeners", () => {
-  const context = { subscriptions: [], globalStorageUri: { fsPath: "/ext-storage" } };
+  const context = { subscriptions: [], globalStorageUri: { fsPath: STORAGE_DIR } };
   ext.activate(context);
   assert.strictEqual(registered.length, 1);
   assert.strictEqual(registered[0].id, "devin-memory");
@@ -119,7 +125,7 @@ test("definition launches the resolved devin-memory-mcp; cwd is the workspace Ur
   // inside-workspace rejection bound) and the live trust state.
   assert.strictEqual(safeExeCalls.length, 1);
   assert.strictEqual(safeExeCalls[0].exe, "devin-memory-mcp");
-  assert.strictEqual(safeExeCalls[0].opts.workspaceDir, "/repo");
+  assert.deepStrictEqual(safeExeCalls[0].opts.workspaceDirs, ["/repo"]);
   assert.strictEqual(safeExeCalls[0].opts.trusted, true);
   assert.strictEqual(safeExeCalls[0].opts.npmPackage, null);
 });
@@ -147,7 +153,7 @@ test("custom executable/args flow into the definition", () => {
   assert.deepStrictEqual(defs[0].args, ["devin-memory-mcp"]);
   assert.strictEqual(defs[0].cwd, undefined);
   assert.strictEqual(safeExeCalls[0].exe, "uvx");
-  assert.strictEqual(safeExeCalls[0].opts.workspaceDir, null);
+  assert.deepStrictEqual(safeExeCalls[0].opts.workspaceDirs, []);
 });
 
 test("spec.argv (e.g. a resolved .cmd shim entry) precedes configured args", () => {
@@ -184,9 +190,25 @@ test("the workspace trust state is forwarded to the resolver", () => {
   try {
     __internals__.provideMcpServerDefinitions();
     assert.strictEqual(safeExeCalls[0].opts.trusted, false);
-    assert.strictEqual(safeExeCalls[0].opts.workspaceDir, "/repo");
+    assert.deepStrictEqual(safeExeCalls[0].opts.workspaceDirs, ["/repo"]);
   } finally {
     isTrusted = true;
+  }
+});
+
+test("multi-root: every workspace root's fsPath reaches the resolver", () => {
+  settings = {};
+  safeExeResult = { file: "/resolved/devin-memory-mcp", argv: [] };
+  safeExeCalls.length = 0;
+  isTrusted = false;
+  folders = [{ uri: { fsPath: "/root-a" } }, { uri: { fsPath: "/root-b" } }];
+  try {
+    __internals__.provideMcpServerDefinitions();
+    // A binary planted in a secondary root is inside the rejection set too.
+    assert.deepStrictEqual(safeExeCalls[0].opts.workspaceDirs, ["/root-a", "/root-b"]);
+  } finally {
+    isTrusted = true;
+    folders = [];
   }
 });
 
@@ -210,7 +232,7 @@ test("untrusted workspace: cwd is extension storage, not the repo", () => {
   folders = [{ uri }];
   isTrusted = false;
   const defs = __internals__.provideMcpServerDefinitions();
-  assert.deepStrictEqual(defs[0].cwd, { fsPath: "/ext-storage" });
+  assert.deepStrictEqual(defs[0].cwd, { fsPath: STORAGE_DIR });
   assert.notStrictEqual(defs[0].cwd, uri);
   isTrusted = true;
   const trusted = __internals__.provideMcpServerDefinitions();
@@ -233,4 +255,26 @@ test("workspace-folder change re-collects the definition", () => {
   registered[0].provider.onDidChangeMcpServerDefinitions(() => { fired += 1; });
   folderListeners.forEach((l) => l());
   assert.strictEqual(fired, 1);
+});
+
+// Last: re-activating would add a second set of listeners and break the
+// counts the earlier tests assert on.
+test("fresh install: restricted launch creates the missing storage dir", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const missing = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "devin-brain-storage-")), "sub");
+  ext.activate({ subscriptions: [], globalStorageUri: { fsPath: missing } });
+  settings = {};
+  isTrusted = false;
+  folders = [{ uri: { fsPath: "/repo" } }];
+  try {
+    const defs = __internals__.provideMcpServerDefinitions();
+    assert.deepStrictEqual(defs[0].cwd, { fsPath: missing });
+    assert.ok(fs.statSync(missing).isDirectory());
+  } finally {
+    isTrusted = true;
+    folders = [];
+  }
 });
