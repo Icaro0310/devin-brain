@@ -11,6 +11,12 @@
 // human opt-in — src/devin_memory/mcp_server.py::_promotion_enabled.
 
 const vscode = require("vscode");
+// Shared Restricted-Mode-safe executable resolver — byte-identical copy of
+// devin-powerups' adapters/shared/safe-executable.cjs (lockstep enforced by
+// config-restricted-check). On Windows, CreateProcess searches cwd before
+// PATH: the definition must carry the absolute path this returns — with it,
+// the workspace cwd assigned below stays inert.
+const { resolveSafeExecutable } = require("./safe-executable.cjs");
 
 // Contract with the devin-memory-mcp dist (packaging/devin-memory-mcp).
 // Keep in sync with the "devin-memory-mcp" range in package.json —
@@ -46,12 +52,27 @@ function serverEnv() {
 
 function provideMcpServerDefinitions() {
   const { executable, args } = config();
+  const wsUri = workspaceUri();
+  // Resolve BEFORE handing the command to VS Code: the definition's cwd is
+  // the workspace, and on Windows a bare name there would run a binary
+  // planted inside an untrusted repo. In Restricted Mode the helper also
+  // rejects candidates resolving inside the workspace.
+  const spec = resolveSafeExecutable(executable, {
+    workspaceDir: wsUri ? wsUri.fsPath : null,
+    trusted: vscode.workspace.isTrusted,
+    npmPackage: null,
+  });
+  if (!spec) {
+    throw new Error(
+      "devin-memory-mcp not found on PATH. Install it " +
+      "(pipx install devin-memory-mcp) or set devinMemory.executable.");
+  }
   // The ctor is (label, command, args?, env?, version?) — cwd is a writable
   // Uri property on the definition, not a constructor argument. Assign it
   // so the server's default ./memory.db lands inside the workspace.
   const def = new vscode.McpStdioServerDefinition(
-    "devin-memory (devin-brain)", executable, args, serverEnv());
-  def.cwd = workspaceUri();
+    "devin-memory (devin-brain)", spec.file, spec.argv.concat(args), serverEnv());
+  def.cwd = wsUri;
   return [def];
 }
 
