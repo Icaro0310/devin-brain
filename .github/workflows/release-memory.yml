@@ -96,8 +96,27 @@ jobs:
       # `release.published` event — GitHub blocks recursive workflow
       # triggers from the same token — so pypi-publish.yml would never
       # fire on its own and the PyPI leg would be silently lost.
-      # Dispatch it explicitly on the tag instead.
+      # Dispatch it explicitly on the tag instead — but ONLY on a
+      # confirmed 404 (wheel unpublished): a lookup outage yields
+      # `published=unknown` and skips the dispatch rather than firing a
+      # redundant one that can fail the job. The dispatch itself is
+      # continue-on-error: a PyPI-side failure must not take the
+      # unrelated extension fanout down with it.
+      - name: Check wheel already on PyPI
+        id: wheel
+        run: |
+          v=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/devin-memory/$v/json" || echo 000)
+          case "$code" in
+            200) echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "published=unknown" >> "$GITHUB_OUTPUT"
+                 echo "::warning::PyPI lookup returned HTTP $code — skipping wheel dispatch" ;;
+          esac
+
       - name: Trigger PyPI publish workflow
+        if: steps.wheel.outputs.published == 'false'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
