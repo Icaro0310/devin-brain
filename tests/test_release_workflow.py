@@ -60,15 +60,20 @@ def test_validate_gates_tag_manifest_match():
     assert "package.json" in tag_steps[0]["run"]
 
 
-def test_pypi_dispatch_only_when_wheel_pending_and_blocking():
+def test_pypi_dispatch_only_when_wheel_pending_and_nonblocking():
     """The dispatch is the only PyPI trigger (GITHUB_TOKEN emits no
     release.published), so it must run when the wheel is unpublished —
-    and a failure must stay loud (no continue-on-error masking)."""
+    but a PyPI-side outage must not take the extension fanout down:
+    the lookup distinguishes a true 404 from other failures, and the
+    dispatch is continue-on-error."""
     steps = _load()["jobs"]["release"]["steps"]
     probe = [s for s in steps if s.get("id") == "wheel"]
     assert len(probe) == 1
     assert "pypi.org/pypi/devin-memory/" in probe[0]["run"]
+    # A non-200/404 lookup result must map to a non-dispatch state so a
+    # PyPI outage does not trigger a redundant (and failing) dispatch.
+    assert "published=unknown" in probe[0]["run"]
     dispatch = [s for s in steps if "gh workflow run" in s.get("run", "")]
     assert len(dispatch) == 1
     assert dispatch[0]["if"] == "steps.wheel.outputs.published == 'false'"
-    assert "continue-on-error" not in dispatch[0]
+    assert dispatch[0]["continue-on-error"] is True
