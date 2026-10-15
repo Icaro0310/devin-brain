@@ -139,6 +139,7 @@ jobs:
     secrets:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
     with:
+      azure-marketplace-required: true
       # Extension-only release: adapters/vscode has no pyproject.toml,
       # so detect marks has-wheel=false and the verify/PyPI/docker legs
       # skip. Pointing at "." instead would read the root wheel
