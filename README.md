@@ -164,6 +164,14 @@ Claude Desktop, Cursor or any MCP client:
 pipx install "devin-memory-mcp"
 ```
 
+The `devin-memory-mcp` console script also ships inside the base
+`devin-memory` dist, so a bare `uv tool install devin-memory` (no extra)
+leaves a script that exits with `error: The MCP server needs the 'mcp'
+extra` — recovery steps live in the Troubleshooting section of each
+platform guide ([Linux](README.linux.md),
+[Personal Windows](README.windows.md),
+[Corporate Windows](README.corporate-windows.md)).
+
 Client config:
 
 ```json
