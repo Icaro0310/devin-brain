@@ -2,7 +2,7 @@
   "name": "devin-memory",
   "displayName": "devin-memory (devin-brain)",
   "description": "Registers the devin-memory MCP server (devin-brain: anti-poisoning memory for agents) with VS Code's MCP support. Thin adapter: the extension only declares how to launch the server \u2014 no tool logic is reimplemented here.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "icaro0310",
   "license": "MIT",
   "devin-memory-mcp": ">=0.3.1,<0.4.0",

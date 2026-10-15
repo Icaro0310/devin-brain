@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1]
+
+### Fixed
+
+- First published build carrying the Restricted Mode support — the
+  0.1.0 package uploaded to Open VSX predated it.
+
 ## [0.1.0]
 
 ### Security
