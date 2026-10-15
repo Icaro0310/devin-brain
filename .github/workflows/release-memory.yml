@@ -96,13 +96,25 @@ jobs:
       # `release.published` event — GitHub blocks recursive workflow
       # triggers from the same token — so pypi-publish.yml would never
       # fire on its own and the PyPI leg would be silently lost.
-      # Dispatch it explicitly on the tag instead.
+      # Dispatch it explicitly on the tag instead — but ONLY when the
+      # wheel version is not yet on PyPI: a memory-v* tag normally
+      # carries no new wheel, in which case the dispatch is skipped and
+      # can neither fail nor mask anything. When the wheel IS pending,
+      # this dispatch is the only publish trigger and must stay
+      # blocking — a silent skip would strand the wheel on a green
+      # release.
+      - name: Check wheel already on PyPI
+        id: wheel
+        run: |
+          v=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if curl -sf "https://pypi.org/pypi/devin-memory/$v/json" -o /dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Trigger PyPI publish workflow
-        # continue-on-error: a memory-v* tag carries no new wheel version,
-        # so this dispatch is an idempotent re-verify (skip-existing). A
-        # transient `gh workflow run` failure must not fail `release` and
-        # starve the fanout leg — same treatment as release-qa-pack.yml.
-        continue-on-error: true
+        if: steps.wheel.outputs.published == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
