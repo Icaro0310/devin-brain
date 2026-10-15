@@ -98,6 +98,11 @@ jobs:
       # fire on its own and the PyPI leg would be silently lost.
       # Dispatch it explicitly on the tag instead.
       - name: Trigger PyPI publish workflow
+        # continue-on-error: a memory-v* tag carries no new wheel version,
+        # so this dispatch is an idempotent re-verify (skip-existing). A
+        # transient `gh workflow run` failure must not fail `release` and
+        # starve the fanout leg — same treatment as release-qa-pack.yml.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
