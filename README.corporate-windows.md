@@ -87,3 +87,8 @@ User-scope registration (`schtasks` or the `ScheduledTask` cmdlets) needs no adm
 ## Troubleshooting
 
 - If a command is not found, reopen PowerShell and run `uv tool update-shell`.
+- If `devin-memory-mcp` exits with `error: The MCP server needs the 'mcp' extra`
+  (the editor reports the server exiting with code 1), a bare `devin-memory`
+  install is on PATH — `uv tool install` does not add extras to an existing
+  tool. Force-reinstall with the extra: `uv tool install --force "devin-memory[mcp]"`
+  (or `pipx install --force devin-memory-mcp` for the shim).

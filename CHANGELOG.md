@@ -6,6 +6,11 @@
 
 ## Unreleased (F4)
 
+- **Docs** — the missing-`mcp`-extra recovery moved from the shared
+  README to the platform guides' Troubleshooting sections, and now
+  notes that adding the extra to an existing tool needs `--force`
+  (`uv tool install --force 'devin-memory[mcp]'`).
+
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,

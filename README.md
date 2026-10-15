@@ -167,11 +167,10 @@ pipx install "devin-memory-mcp"
 The `devin-memory-mcp` console script also ships inside the base
 `devin-memory` dist, so a bare `uv tool install devin-memory` (no extra)
 leaves a script that exits with `error: The MCP server needs the 'mcp'
-extra`. If you see that, reinstall with the extra:
-`uv tool install 'devin-memory[mcp]'` — or use the shim above, which
-pulls `devin-memory[mcp]` transitively. VS Code's built-in MCP support
-and the `devin-memory` extension hit the same PATH script, so the same
-note applies when the editor reports the server exiting with code 1.
+extra` — recovery steps live in the Troubleshooting section of each
+platform guide ([Linux](README.linux.md),
+[Personal Windows](README.windows.md),
+[Corporate Windows](README.corporate-windows.md)).
 
 Client config:
 
