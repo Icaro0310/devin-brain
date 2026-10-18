@@ -109,6 +109,9 @@
 - **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
 - **Fix** — `devin_memory.learning.__version__` is now the submodule's own version (synced with the package release) instead of the root `devin_memory.__version__`; it drives `devin-learning --version` and the `version` field in extract/review reports. Corrects the 0.3.0 note that attributed those outputs to the root module.
 
+- **CI** — `actions/checkout` bumped from 4.4.0 to 7.0.1 in
+  `release-memory.yml` (Dependabot).
+
 ## 0.3.0
 
 - **Fix** — `devin_memory.__version__` now reports the package version (was stale at `0.1.0` while `pyproject.toml` declared `0.3.0`); drives `devin-learning --version` and report metadata.
