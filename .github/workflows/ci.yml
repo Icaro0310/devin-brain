@@ -34,7 +34,10 @@ jobs:
 
       - name: Install
         # sibling deps resolve from PyPI at release time; CI installs them
-        # from git so main stays green before the packages are published
+        # from git so main stays green before the packages are published.
+        # --no-deps keeps PyPI versions of those siblings out of the test
+        # env; test deps not shipped by the package (pytest, mcp, pyyaml
+        # for tests/test_release_workflow.py) are hand-listed below.
         run: |
           pip install "devin-redact @ git+https://github.com/Icaro0310/devin-state.git#subdirectory=packages/redact" "devin-internals-spec @ git+https://github.com/Icaro0310/devin-internals-spec.git"
           pip install -e ".[dev]" --no-deps
