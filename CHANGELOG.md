@@ -6,6 +6,12 @@
 
 ## Unreleased (F4)
 
+- **CI** — the test job installs `pyyaml` (imported by
+  `tests/test_release_workflow.py` but never declared in the install
+  step) and enables `core.longpaths` on Windows runners, where pip's
+  git clone of `devin-internals-spec` previously failed checkout on
+  MAX_PATH and the sibling dependency never installed.
+
 - **Docs** — the missing-`mcp`-extra recovery moved from the shared
   README to the platform guides' Troubleshooting sections, and now
   notes that adding the extra to an existing tool needs `--force`
