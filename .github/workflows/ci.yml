@@ -25,6 +25,13 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Enable git long paths (windows)
+        if: runner.os == 'Windows'
+        # devin-internals-spec ships fixture trees deeper than MAX_PATH;
+        # without this, pip's git clone fails checkout and the sibling
+        # never installs (ModuleNotFoundError: devin_internals)
+        run: git config --global core.longpaths true
+
       - name: Install
         # sibling deps resolve from PyPI at release time; CI installs them
         # from git so main stays green before the packages are published
