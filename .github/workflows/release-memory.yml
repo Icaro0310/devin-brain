@@ -42,6 +42,10 @@ jobs:
   # versioned independently and is not bound to `memory-v*` tags.
   validate:
     runs-on: ubuntu-latest
+    # Read-only job: narrows the top-level `contents: write` + `actions:
+    # write` down to what a tag/manifest comparison actually needs.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
