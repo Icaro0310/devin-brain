@@ -11,7 +11,13 @@
   `store.set_expires_at`; `supersede` inherits the old TTL by default).
   An entry past its expiry is *excluded* from `recall`/`prime` — never
   deleted, so it stays auditable via `list`/`export --all`, and
-  `recall --include-expired` / `include_expired=True` opts out. Writes
+  `recall --include-expired` / `include_expired=True` opts out. The same
+  filtered-view rule now reaches the other read surfaces: default
+  `export` skips expired rows (live rows keep their `expires_at` so
+  importers preserve the lifetime), the retain-time conflict scan
+  ignores expired entries, and `compact` prefers a live survivor with
+  the furthest expiry so dedup cannot retract the only live copy.
+  Writes
   validate eagerly (`ValueError` on malformed input); a malformed value
   that only exists via a hand-edited row fails open rather than silently
   dropping the memory. `recall` also weights keyword scores by
@@ -37,7 +43,6 @@
   notes that adding the extra to an existing tool needs `--force`
   (`uv tool install --force 'devin-memory[mcp]'`).
 
->>>>>>> origin/main
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,

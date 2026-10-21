@@ -6,11 +6,12 @@ import json
 from datetime import datetime
 
 import pytest
-from fixtures import CLEAN_FACT, SECRET_FACT
 
 from devin_memory import ops
 from devin_memory.export import export_jsonl
 from devin_memory.store import MemoryStore
+
+from fixtures import CLEAN_FACT, SECRET_FACT
 
 
 @pytest.fixture

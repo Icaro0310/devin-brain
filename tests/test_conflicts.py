@@ -7,11 +7,12 @@ import json
 import sqlite3
 
 import pytest
-from fixtures import CLEAN_FACT, SECRET_FACT
 
 from devin_memory import ops
 from devin_memory.cli import main
 from devin_memory.store import MemoryStore
+
+from fixtures import CLEAN_FACT, SECRET_FACT
 
 
 @pytest.fixture

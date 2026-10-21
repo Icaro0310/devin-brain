@@ -7,8 +7,9 @@ writes ``.devin/memory/memories.jsonl``)::
      "content": "...", "tags": [...], "source": "session:<id>"}
 
 Optional extra keys are added when present: ``source_rowid``,
-``version``, ``supersedes`` (the export id of the superseded entry).
-Consumers that only know the base shape can ignore them.
+``expires_at``, ``version``, ``supersedes`` (the export id of the
+superseded entry). Consumers that only know the base shape can ignore
+them.
 
 Only ``active`` entries are exported by default — quarantined and
 retracted rows never leave the store unless ``include_non_active``

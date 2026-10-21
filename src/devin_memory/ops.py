@@ -782,8 +782,11 @@ def compact(store: MemoryStore, *, apply: bool = False) -> dict[str, Any]:
     A duplicate group is ≥2 non-retracted entries with identical
     ``content``, ``workspace`` and ``profile``. The survivor is the entry
     with the liveliest status (``active`` > ``proposed`` >
-    ``quarantined``), ties broken by lowest id; every other copy becomes
-    ``retracted`` — rows are never deleted, so provenance and reasons
+    ``quarantined``); within a status an expired copy loses to a live
+    one and the furthest ``expires_at`` wins, so compact never retracts
+    the only copy recall can still serve — remaining ties break by
+    lowest id. Every other copy becomes ``retracted`` — rows are never
+    deleted, so provenance and reasons
     stay auditable on the retracted rows. The survivor inherits the union
     of the group's tags (recall surface) and, when quarantined, the union
     of quarantine reasons (review accuracy).

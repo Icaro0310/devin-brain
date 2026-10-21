@@ -14,11 +14,12 @@ import json
 import sqlite3
 
 import pytest
-from fixtures import CLEAN_FACT, CLEAN_FACT_2, SECRET_FACT
 
 from devin_memory import ops
 from devin_memory.cli import main
 from devin_memory.store import MemoryStore
+
+from fixtures import CLEAN_FACT, CLEAN_FACT_2, SECRET_FACT
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 

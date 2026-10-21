@@ -14,7 +14,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fixtures import CLEAN_FACT, CLEAN_FACT_2
 
 from devin_memory import ops
 from devin_memory.store import (
@@ -22,6 +21,8 @@ from devin_memory.store import (
     is_expired,
     parse_expires_at,
 )
+
+from fixtures import CLEAN_FACT, CLEAN_FACT_2
 
 
 @pytest.fixture
