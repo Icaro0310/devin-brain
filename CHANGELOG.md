@@ -22,6 +22,9 @@
   notes that adding the extra to an existing tool needs `--force`
   (`uv tool install --force 'devin-memory[mcp]'`).
 
+- **Docs** — README badge row gains the mcprush security badge
+  (independent `A` grade listing), next to the other registry badges.
+
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,
