@@ -35,6 +35,37 @@ def store(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def test_compact_survivor_prefers_unexpired_copy(store):
+    """An expired duplicate must not win survivor selection — keeping
+    it would retract the only live copy recall can serve."""
+    from datetime import datetime, timedelta, timezone
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    old = ops.retain(store, CLEAN_FACT, expires_at=past)
+    live = ops.retain(store, CLEAN_FACT, expires_at=future)
+
+    report = ops.compact(store, apply=True)
+
+    (group,) = report["groups"]
+    assert group["keep_id"] == live.id
+    assert store.get(old.id).status == "retracted"
+    assert store.get(live.id).status == "active"
+    # the merged copy keeps the furthest expiry — the intended lifetime
+    assert store.get(live.id).expires_at == future
+
+
+def test_compact_survivor_prefers_no_expiry_over_expired(store):
+    from datetime import datetime, timedelta, timezone
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    old = ops.retain(store, CLEAN_FACT, expires_at=past)
+    live = ops.retain(store, CLEAN_FACT)
+
+    ops.compact(store, apply=True)
+
+    assert store.get(live.id).status == "active"
+    assert store.get(old.id).status == "retracted"
+
+
 def test_compact_finds_exact_content_duplicates(store):
     a = ops.retain(store, CLEAN_FACT)
     b = ops.retain(store, CLEAN_FACT)  # retain does not dedupe

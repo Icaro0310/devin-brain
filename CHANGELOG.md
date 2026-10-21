@@ -6,6 +6,27 @@
 
 ## Unreleased (F4)
 
+- **`expires_at` + recall decay** — entries can carry an optional ISO-8601
+  `expires_at` TTL (`retain --expires-at`, `supersede --expires-at`,
+  `store.set_expires_at`; `supersede` inherits the old TTL by default).
+  An entry past its expiry is *excluded* from `recall`/`prime` — never
+  deleted, so it stays auditable via `list`/`export --all`, and
+  `recall --include-expired` / `include_expired=True` opts out. The same
+  filtered-view rule now reaches the other read surfaces: default
+  `export` skips expired rows (live rows keep their `expires_at` so
+  importers preserve the lifetime), the retain-time conflict scan
+  ignores expired entries, and `compact` prefers a live survivor with
+  the furthest expiry so dedup cannot retract the only live copy.
+  Writes
+  validate eagerly (`ValueError` on malformed input); a malformed value
+  that only exists via a hand-edited row fails open rather than silently
+  dropping the memory. `recall` also weights keyword scores by
+  exponential recency decay — half-life 30 days
+  (`ops.RECALL_DECAY_HALF_LIFE_DAYS`, per-call `half_life_days`, `None`
+  disables) — so fresh memories win close calls without drowning clearly
+  stronger stale hits. The column is an additive migration; old
+  `memory.db` files open unchanged and never expire. Also exposed as
+  `expires_at`/`include_expired` on the MCP `retain`/`recall` tools.
 - **CI** — `pr-approve` caller bumped from v1.3 to v1.6 in
   `auto-approve.yml` (the v1.6 gate adds cross-repo fix anchors and
   gate-eligible concurrency) and gains the `pull_request_review_comment`
