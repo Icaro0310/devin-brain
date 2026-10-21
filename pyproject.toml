@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "PyYAML>=6"]
 mcp = ["mcp>=1.9"]
 
 [project.scripts]
