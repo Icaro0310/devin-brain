@@ -113,9 +113,13 @@ pytest
 devin-memory retain "CI is green on Windows + Linux" --tags ci,status
 devin-memory retain "..." --source-session <session-id> --source-rowid <n>
 devin-memory retain "..." --workspace /path/to/project   # scope to a workspace
+devin-memory retain "..." --expires-at 2026-12-31T00:00:00Z  # TTL: drops
+                                   # out of recall/prime after this instant
 
-# Keyword-ranked recall — returns active entries only
+# Keyword-ranked recall — returns active, unexpired entries only;
+# scores are weighted by recency decay so fresh memories outrank stale ones
 devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
+devin-memory recall "ci status" --include-expired  # also surface expired
 
 # Quarantine lane: list, mark an existing entry, or release one
 devin-memory quarantine                          # list with reasons
@@ -139,7 +143,8 @@ devin-memory approve <id>             # proposed -> active
 devin-memory prime [--workspace PATH] [--max-tokens N]
 
 # Versioning and housekeeping
-devin-memory supersede <id> "corrected fact"
+devin-memory supersede <id> "corrected fact" [--expires-at <iso>]
+                                          # default: inherit old expiry
 devin-memory retract <id>
 devin-memory list [--status active|proposed|quarantined|retracted] [--json]
 devin-memory compact [--json]   # dedup report (dry-run)
@@ -274,6 +279,16 @@ devin-learning weekly-report --sessions-db path/to/sessions.db --out ./docs/lear
 (screened or manually flagged, awaiting `release`) · `retracted` (withdrawn or
 superseded). Only `active` entries surface in `recall`/`prime`/`export` —
 quarantined content is never printed and never recalled.
+
+An `active` entry can also carry `expires_at` (ISO-8601, set at `retain`/
+`supersede` or changed via `set_expires_at`): once the instant passes the
+entry is excluded from `recall`/`prime` — excluded, not deleted, so it stays
+visible in `list`/`export --all` for audit (`recall --include-expired`
+opts out). Entries without `expires_at` never expire. Separately, `recall`
+applies an exponential recency decay to keyword scores (half-life 30 days,
+`ops.RECALL_DECAY_HALF_LIFE_DAYS`, tunable per call via `half_life_days`) —
+fresher memories win close calls while clearly stronger stale hits still
+rank first.
 
 ## Conflicts, extraction and prime (heuristics)
 

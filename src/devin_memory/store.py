@@ -17,6 +17,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
@@ -40,7 +41,8 @@ CREATE TABLE IF NOT EXISTS entries (
   machine_id TEXT,
   profile TEXT,
   conflicts_with INTEGER REFERENCES entries(id),
-  workspace TEXT
+  workspace TEXT,
+  expires_at TEXT
 );
 """
 
@@ -59,6 +61,7 @@ _MIGRATED_COLUMNS = {
     "profile": "TEXT",
     "conflicts_with": "INTEGER",
     "workspace": "TEXT",
+    "expires_at": "TEXT",
 }
 
 
@@ -80,6 +83,7 @@ class Entry:
     profile: str | None = None
     conflicts_with: int | None = None
     workspace: str | None = None
+    expires_at: str | None = None  # ISO-8601; None = never expires
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -104,7 +108,51 @@ def _row_to_entry(r: sqlite3.Row) -> Entry:
         profile=r["profile"],
         conflicts_with=r["conflicts_with"],
         workspace=r["workspace"],
+        expires_at=r["expires_at"],
     )
+
+
+def parse_expires_at(value: str) -> float:
+    """Validate an ISO-8601 ``expires_at`` and return epoch milliseconds.
+
+    Accepts anything :func:`datetime.fromisoformat` reads (date-only
+    allowed, meaning midnight) plus a trailing ``Z``/``z`` — fromisoformat
+    only learned ``Z`` in 3.11 and the floor here is 3.10. Naive values
+    are read as UTC. Raises :class:`ValueError` on malformed input: every
+    write path validates eagerly so bad values never reach a row through
+    the API.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("expires_at must be a non-empty ISO-8601 string")
+    text = value.strip()
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(f"malformed expires_at {value!r}") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp() * 1000
+
+
+def is_expired(entry: Entry, now_ms: float | None = None) -> bool:
+    """True when ``entry.expires_at`` is set and its moment has passed.
+
+    A stored value that fails to parse fails *open* (treated as
+    non-expiring): every write validates, so a malformed value can only
+    come from a hand-edited row — and a corrupt TTL must not silently
+    drop a memory from recall. ``list``/``get`` still surface the raw
+    value for cleanup.
+    """
+    if entry.expires_at is None:
+        return False
+    try:
+        expiry_ms = parse_expires_at(entry.expires_at)
+    except ValueError:
+        return False
+    now = time.time() * 1000 if now_ms is None else now_ms
+    return expiry_ms <= now
 
 
 class MemoryStore:
@@ -239,9 +287,12 @@ class MemoryStore:
         profile: str | None = None,
         conflicts_with: int | None = None,
         workspace: str | None = None,
+        expires_at: str | None = None,
     ) -> Entry:
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}")
+        if expires_at is not None:
+            parse_expires_at(expires_at)  # ValueError on malformed
         if machine_id is None or profile is None:
             prov = identity.provenance()
             machine_id = machine_id if machine_id is not None else prov["machine_id"]
@@ -252,8 +303,8 @@ class MemoryStore:
                 "INSERT INTO entries(content, tags, source_session_id,"
                 " source_rowid, created_at, status, version, supersedes_id,"
                 " quarantine_reasons, machine_id, profile, conflicts_with,"
-                " workspace)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " workspace, expires_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     content,
                     json.dumps(list(tags)),
@@ -268,6 +319,7 @@ class MemoryStore:
                     profile,
                     conflicts_with,
                     workspace,
+                    expires_at,
                 ),
             )
         entry = self.get(cur.lastrowid)
@@ -301,6 +353,20 @@ class MemoryStore:
                 (json.dumps(list(tags)), entry_id),
             )
 
+    def set_expires_at(self, entry_id: int, expires_at: str | None) -> None:
+        """Set an entry's ISO-8601 expiry, or clear it with ``None``.
+
+        A non-None value is validated like a write — malformed input
+        raises :class:`ValueError` before the row is touched.
+        """
+        if expires_at is not None:
+            parse_expires_at(expires_at)
+        with self._unit():
+            self._con.execute(
+                "UPDATE entries SET expires_at = ? WHERE id = ?",
+                (expires_at, entry_id),
+            )
+
     # -- maintenance -----------------------------------------------------------
 
     def freelist_bytes(self) -> int:
@@ -331,13 +397,23 @@ class MemoryStore:
         machine_id: str | None = None,
         profile: str | None = None,
         workspace: str | None = None,
+        expires_at: str | None = None,
     ) -> Entry:
-        """Atomically retract ``old_id`` and insert its successor (version+1)."""
+        """Atomically retract ``old_id`` and insert its successor (version+1).
+
+        ``expires_at=None`` inherits the old row's TTL (successors keep
+        the same expiry, like workspace); pass a new ISO value to change
+        it, and :meth:`set_expires_at` on the new id to clear it.
+        """
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}")
         old = self.get(old_id)
         if old is None:
             raise KeyError(old_id)
+        if expires_at is None:
+            expires_at = old.expires_at
+        else:
+            parse_expires_at(expires_at)  # ValueError on malformed
         if machine_id is None or profile is None:
             prov = identity.provenance()
             machine_id = machine_id if machine_id is not None else prov["machine_id"]
@@ -354,8 +430,8 @@ class MemoryStore:
                 "INSERT INTO entries(content, tags, source_session_id,"
                 " source_rowid, created_at, status, version, supersedes_id,"
                 " quarantine_reasons, machine_id, profile, conflicts_with,"
-                " workspace)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " workspace, expires_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     content,
                     json.dumps(list(tags)),
@@ -370,6 +446,7 @@ class MemoryStore:
                     profile,
                     None,
                     workspace,
+                    expires_at,
                 ),
             )
         entry = self.get(cur.lastrowid)

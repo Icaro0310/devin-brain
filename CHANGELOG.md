@@ -6,6 +6,21 @@
 
 ## Unreleased (F4)
 
+- **`expires_at` + recall decay** — entries can carry an optional ISO-8601
+  `expires_at` TTL (`retain --expires-at`, `supersede --expires-at`,
+  `store.set_expires_at`; `supersede` inherits the old TTL by default).
+  An entry past its expiry is *excluded* from `recall`/`prime` — never
+  deleted, so it stays auditable via `list`/`export --all`, and
+  `recall --include-expired` / `include_expired=True` opts out. Writes
+  validate eagerly (`ValueError` on malformed input); a malformed value
+  that only exists via a hand-edited row fails open rather than silently
+  dropping the memory. `recall` also weights keyword scores by
+  exponential recency decay — half-life 30 days
+  (`ops.RECALL_DECAY_HALF_LIFE_DAYS`, per-call `half_life_days`, `None`
+  disables) — so fresh memories win close calls without drowning clearly
+  stronger stale hits. The column is an additive migration; old
+  `memory.db` files open unchanged and never expire. Also exposed as
+  `expires_at`/`include_expired` on the MCP `retain`/`recall` tools.
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,

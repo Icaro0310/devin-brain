@@ -11,11 +11,13 @@ allowed-tools:
 
 When this plugin's MCP server is connected, use the memory tools:
 
-- `retain(content, tags?, workspace?, source_session?)` — store a
-  durable memory. The quarantine gate runs on every write; flagged
-  entries never reach recall.
-- `recall(query?, limit?, tags?)` — keyword-ranked recall over active
-  memories only.
+- `retain(content, tags?, workspace?, source_session?, expires_at?)` —
+  store a durable memory. The quarantine gate runs on every write;
+  flagged entries never reach recall. `expires_at` is an optional
+  ISO-8601 TTL — past it, the memory stops surfacing.
+- `recall(query?, limit?, tags?, include_expired?)` — keyword-ranked
+  recall over active, unexpired memories, recency-decayed (fresh beats
+  stale on close calls). `include_expired=true` also surfaces expired.
 - `screen(content, tags?)` — dry-run the gate: shows the status retain
   would produce without writing.
 - `list(status?, limit?)` — list entries by status.

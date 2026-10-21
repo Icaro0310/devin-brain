@@ -3,15 +3,17 @@
 Subcommands:
 
 - ``retain "<content>" [--tags a,b] [--workspace PATH]``
-  ``[--source-session ID] [--source-rowid N]``
-- ``recall "<query>" [--limit N] [--tags a,b] [--json]``
+  ``[--source-session ID] [--source-rowid N] [--expires-at ISO]``
+- ``recall "<query>" [--limit N] [--tags a,b] [--include-expired]``
+  ``[--json]``
 - ``quarantine [<id>] [--reason r] [--list] [--release ID] [--digest]``
   ``[--json]``
 - ``conflicts [--json]`` — contradiction pairs linked at retain time
 - ``extract <session-id|--latest> --sessions-db DB [--auto-approve]``
 - ``approve <id>`` — promote a proposed extraction to active
 - ``prime [--workspace PATH] [--max-tokens N]`` — hook context block
-- ``retract <id>`` · ``supersede <id> "<content>"`` · ``list``
+- ``retract <id>`` · ``supersede <id> "<content>" [--expires-at ISO]``
+  · ``list``
 - ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
 - ``export --out memories.jsonl [--all]``
 - ``verify <id> --sessions-db <sessions.db>``
@@ -103,6 +105,7 @@ def cmd_retain(args: argparse.Namespace) -> int:
             source_session_id=args.source_session,
             source_rowid=args.source_rowid,
             workspace=args.workspace,
+            expires_at=args.expires_at,
         )
     if args.json:
         _print_json(entry.to_dict())
@@ -119,7 +122,9 @@ def cmd_retain(args: argparse.Namespace) -> int:
 def cmd_recall(args: argparse.Namespace) -> int:
     with _open_store(args) as store:
         hits = ops.recall(
-            store, args.query, limit=args.limit, tags=_tags_arg(args.tags) or None
+            store, args.query, limit=args.limit,
+            tags=_tags_arg(args.tags) or None,
+            include_expired=args.include_expired,
         )
     if args.json:
         _print_json([e.to_dict() for e in hits])
@@ -199,7 +204,8 @@ def cmd_retract(args: argparse.Namespace) -> int:
 def cmd_supersede(args: argparse.Namespace) -> int:
     with _open_store(args) as store:
         entry = ops.supersede(
-            store, args.id, args.content, tags=_tags_arg(args.tags) or None
+            store, args.id, args.content, tags=_tags_arg(args.tags) or None,
+            expires_at=args.expires_at,
         )
     if args.json:
         _print_json(entry.to_dict())
@@ -403,6 +409,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Devin session id this memory came from")
     p.add_argument("--source-rowid", type=int, metavar="N",
                    help="message_nodes rowid the fact is evidenced by")
+    p.add_argument("--expires-at", metavar="ISO", dest="expires_at",
+                   help="ISO-8601 expiry — after it passes the entry stops"
+                        " surfacing in recall/prime (default: never)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_retain)
 
@@ -410,6 +419,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query", help="free-text query; '' returns most recent")
     p.add_argument("--limit", type=int, default=5, metavar="N")
     p.add_argument("--tags", metavar="a,b", help="restrict to these tags")
+    p.add_argument("--include-expired", action="store_true",
+                   help="also return entries past their expires_at")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_recall)
 
@@ -440,6 +451,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("content", help="the corrected content")
     p.add_argument("--tags", metavar="a,b",
                    help="tags for the new version (default: inherit)")
+    p.add_argument("--expires-at", metavar="ISO", dest="expires_at",
+                   help="expiry for the new version (default: inherit)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_supersede)
 

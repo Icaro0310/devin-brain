@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -27,7 +28,7 @@ from devin_memory.screen import (
     SECRET_PATTERNS,
     screen,
 )
-from devin_memory.store import Entry, MemoryStore
+from devin_memory.store import Entry, MemoryStore, is_expired
 
 
 class MemoryOpsError(RuntimeError):
@@ -80,11 +81,15 @@ def retain(
     machine_id: str | None = None,
     profile: str | None = None,
     workspace: str | None = None,
+    expires_at: str | None = None,
 ) -> Entry:
     """Screen ``content`` and store it with the resulting status.
 
     ``machine_id``/``profile`` default to this machine's opaque provenance
     (:mod:`devin_memory.identity`) — pass them only to reattribute an entry.
+    ``expires_at`` is an optional ISO-8601 timestamp: once it passes, the
+    entry stops surfacing in ``recall``/``prime`` (the row stays for
+    audit). Malformed values raise :class:`ValueError` like any bad write.
 
     If the new entry is active and contradicts an existing active entry
     (same subject, opposite directive), both are kept and the new row
@@ -109,6 +114,7 @@ def retain(
         profile=profile,
         conflicts_with=conflicts_with,
         workspace=workspace,
+        expires_at=expires_at,
     )
 
 
@@ -132,18 +138,54 @@ def _score(entry: Entry, terms: list[str]) -> float:
     return score
 
 
+# Recall ranking: keyword score × exponential recency decay — a memory's
+# weight halves every ``RECALL_DECAY_HALF_LIFE_DAYS`` of age, so a fresh
+# entry outranks a stale one unless the stale hit is much stronger.
+RECALL_DECAY_HALF_LIFE_DAYS = 30.0
+_DAY_MS = 86_400_000
+
+
+def _recency_decay(
+    entry: Entry, now_ms: float, half_life_days: float | None
+) -> float:
+    """``1.0`` at write time, ``0.5 ** (age / half_life)`` afterwards.
+
+    ``None`` or non-positive ``half_life_days`` disables decay; future
+    ``created_at`` (clock skew) clamps to age 0, never a boost past 1.
+    """
+    if not half_life_days or half_life_days <= 0:
+        return 1.0
+    age_ms = max(0.0, now_ms - entry.created_at)
+    return 0.5 ** (age_ms / (half_life_days * _DAY_MS))
+
+
 def recall(
     store: MemoryStore,
     query: str = "",
     limit: int = 5,
     tags: Iterable[str] | None = None,
+    *,
+    include_expired: bool = False,
+    half_life_days: float | None = RECALL_DECAY_HALF_LIFE_DAYS,
 ) -> list[Entry]:
     """Keyword-ranked recall over ``active`` entries only.
 
-    Empty ``query`` returns the most recent entries. ``tags`` restricts to
-    entries sharing at least one tag.
+    Entries whose ``expires_at`` has passed are excluded by default —
+    same filtered-view contract as quarantined/retracted rows (``list``
+    and ``get`` still see them); ``include_expired=True`` opts out.
+
+    Relevance is the keyword score weighted by an exponential recency
+    decay on ``created_at`` age (halving every ``half_life_days``), so
+    fresher memories win ties and mildly outrank stronger-but-stale hits
+    as the gap in age grows. ``half_life_days=None`` (or 0) restores pure
+    score ordering. Empty ``query`` returns the most recent entries —
+    already recency-ordered, so decay changes nothing there. ``tags``
+    restricts to entries sharing at least one tag.
     """
+    now_ms = time.time() * 1000
     candidates = store.entries(status="active")
+    if not include_expired:
+        candidates = [e for e in candidates if not is_expired(e, now_ms)]
     if tags is not None:
         wanted = {t.strip().lower() for t in tags if t.strip()}
         candidates = [
@@ -152,9 +194,12 @@ def recall(
         ]
     terms = _terms(query)
     if terms:
-        scored = [(e, _score(e, terms)) for e in candidates]
-        ranked = [e for e, s in scored if s > 0]
-        ranked.sort(key=lambda e: (-_score(e, terms), -e.created_at, -e.id))
+        scored = {
+            e.id: _score(e, terms) * _recency_decay(e, now_ms, half_life_days)
+            for e in candidates
+        }
+        ranked = [e for e in candidates if scored[e.id] > 0]
+        ranked.sort(key=lambda e: (-scored[e.id], -e.created_at, -e.id))
     else:
         ranked = candidates
     return ranked[:limit]
@@ -232,13 +277,15 @@ def supersede(
     tags: Iterable[str] | None = None,
     source_session_id: str | None = None,
     source_rowid: int | None = None,
+    expires_at: str | None = None,
 ) -> Entry:
     """Replace an active entry with a corrected version (history kept).
 
     The old row becomes ``retracted`` and the new row links back via
     ``supersedes_id``/``version``. The new content is screened like any
     other retain — if it quarantines, the old version is still retired
-    (the replacement waits in the queue for review).
+    (the replacement waits in the queue for review). ``expires_at=None``
+    keeps the old row's expiry; pass a new ISO timestamp to change it.
     """
     old = _require(store, entry_id)
     if old.status != "active":
@@ -258,6 +305,7 @@ def supersede(
         quarantine_reasons=result.reasons,
         source_session_id=source_session_id or old.source_session_id,
         source_rowid=source_rowid if source_rowid is not None else old.source_rowid,
+        expires_at=expires_at,
     )
 
 
@@ -446,8 +494,10 @@ def prime(
 ) -> str:
     """Render a compact context block for a UserPromptSubmit hook.
 
-    Only ``active`` entries are eligible — quarantined, proposed and
-    retracted entries never surface. Filtering (heuristic, documented):
+    Only ``active``, unexpired entries are eligible — quarantined,
+    proposed, retracted and past-``expires_at`` entries never surface
+    (same filtered-view contract as :func:`recall`). Filtering
+    (heuristic, documented):
 
     - **workspace**: an entry scoped to a workspace only primes inside that
       workspace; unscoped entries are global. ``workspace=None`` means "no
@@ -462,6 +512,7 @@ def prime(
     """
     current_profile = profile or identity.profile()
     wanted_ws = _norm_workspace(workspace)
+    now_ms = time.time() * 1000
     eligible = [
         e
         for e in store.entries(status="active")
@@ -471,6 +522,7 @@ def prime(
             or e.workspace is None
             or _norm_workspace(e.workspace) == wanted_ws
         )
+        and not is_expired(e, now_ms)
     ]
 
     budget = max(0, max_tokens) * CHARS_PER_TOKEN
