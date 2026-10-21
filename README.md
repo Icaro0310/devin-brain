@@ -8,6 +8,7 @@
 <a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx" alt="M8ven Score"/></a>
 <a href="https://glama.ai/mcp/servers/Icaro0310/devin-brain"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-brain/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://mcpservers.org/servers/icaro0310/devin-memory"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"/></a>
+<a href="https://mcprush.com/to/devin-memory-mcp?ref=badge"><img src="https://mcprush.com/badge/devin-memory-mcp/score.svg" alt="mcprush Score"/></a>
 <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-blueviolet" alt="MCP Registry"/></a>
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"/></a>
