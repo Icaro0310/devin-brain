@@ -6,6 +6,11 @@
 
 ## Unreleased (F4)
 
+- **CI** — `pr-approve` caller bumped from v1.3 to v1.6 in
+  `auto-approve.yml` (the v1.6 gate adds cross-repo fix anchors and
+  gate-eligible concurrency) and gains the `pull_request_review_comment`
+  trigger so fix-commit replies re-run the gate on the same head;
+  `tests/test_auto_approve_workflow.py` pins the caller contract.
 - **CI** — the test job installs `pyyaml` (imported by
   `tests/test_release_workflow.py` but never declared in the install
   step) and enables `core.longpaths` on Windows runners, where pip's
