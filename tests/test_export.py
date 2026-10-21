@@ -6,12 +6,11 @@ import json
 from datetime import datetime
 
 import pytest
+from fixtures import CLEAN_FACT, SECRET_FACT
 
 from devin_memory import ops
 from devin_memory.export import export_jsonl
 from devin_memory.store import MemoryStore
-
-from fixtures import CLEAN_FACT, SECRET_FACT
 
 
 @pytest.fixture
@@ -38,6 +37,23 @@ def test_export_writes_memory_mcp_shape(store, tmp_path):
     assert isinstance(row["ts"], float)
     # ISO-8601 with numeric offset, e.g. 2026-09-29T15:46:14+0100
     datetime.strptime(row["iso"], "%Y-%m-%dT%H:%M:%S%z")
+
+
+def test_export_skips_expired_and_keeps_lifetime(store, tmp_path):
+    from datetime import datetime, timedelta, timezone
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    live = ops.retain(store, CLEAN_FACT, expires_at=future)
+    ops.retain(store, "old fact", expires_at=past)
+
+    out = tmp_path / "memories.jsonl"
+    assert export_jsonl(store, out) == 1
+    (row,) = _lines(out)
+    # the live entry carries its expiry so importers preserve lifetime
+    assert row["content"] == CLEAN_FACT
+    assert row["expires_at"] == future
+    # --all keeps expired rows for audit
+    assert export_jsonl(store, out, include_non_active=True) == 2
 
 
 def test_export_excludes_non_active_by_default(store, tmp_path):

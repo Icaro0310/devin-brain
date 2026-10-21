@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from fixtures import CLEAN_FACT, CLEAN_FACT_2
 
 from devin_memory import ops
 from devin_memory.store import (
@@ -21,8 +22,6 @@ from devin_memory.store import (
     is_expired,
     parse_expires_at,
 )
-
-from fixtures import CLEAN_FACT, CLEAN_FACT_2
 
 
 @pytest.fixture
@@ -204,6 +203,28 @@ def test_decay_disabled_restores_pure_score_order(store, db):
     assert [e.id for e in hits] == [stale.id, fresh.id]
     hits0 = ops.recall(store, "alpha", half_life_days=0)
     assert [e.id for e in hits0] == [stale.id, fresh.id]
+
+
+def test_short_half_life_ranks_instead_of_dropping(store, db):
+    # a decayed-to-zero weight must rank last, not vanish — eligibility
+    # is the raw keyword score, not the weighted one
+    old = ops.retain(store, "sqlite notes from long ago")
+    _age_days(db, old.id, 14)
+    hits = ops.recall(store, "sqlite", half_life_days=0.001)
+    assert [e.id for e in hits] == [old.id]
+
+
+def test_half_life_constant_is_read_at_call_time(store, db, monkeypatch):
+    # mutating RECALL_DECAY_HALF_LIFE_DAYS tunes the default later calls
+    # use — the constant is not captured as a default-arg snapshot
+    stale = ops.retain(store, "alpha alpha alpha alpha")
+    fresh = ops.retain(store, "alpha")
+    _age_days(db, stale.id, 200)
+    assert [e.id for e in ops.recall(store, "alpha")] == [
+        fresh.id, stale.id]
+    monkeypatch.setattr(ops, "RECALL_DECAY_HALF_LIFE_DAYS", 0)
+    assert [e.id for e in ops.recall(store, "alpha")] == [
+        stale.id, fresh.id]
 
 
 def test_decay_preserves_same_age_ordering(store):

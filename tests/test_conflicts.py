@@ -7,12 +7,11 @@ import json
 import sqlite3
 
 import pytest
+from fixtures import CLEAN_FACT, SECRET_FACT
 
 from devin_memory import ops
 from devin_memory.cli import main
 from devin_memory.store import MemoryStore
-
-from fixtures import CLEAN_FACT, SECRET_FACT
 
 
 @pytest.fixture
@@ -53,6 +52,19 @@ def test_different_subject_is_not_a_conflict(store):
     ops.retain(store, ALWAYS_PYTEST)
     other = ops.retain(store, "Never commit secrets to the repository.")
     assert other.conflicts_with is None
+    assert ops.conflicts(store) == []
+
+
+def test_expired_entry_is_not_a_conflict_source(store):
+    # a contradiction to a memory recall already hides is not a live
+    # conflict — expired entries stay out of the link heuristic
+    from datetime import datetime, timedelta, timezone
+    expired_stamp = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).isoformat()
+    ops.retain(store, ALWAYS_PYTEST, expires_at=expired_stamp)
+    new = ops.retain(store, NEVER_PYTEST)
+    assert new.conflicts_with is None
     assert ops.conflicts(store) == []
 
 

@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sqlite3
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from devin_internals.parsers import SessionsStore
 
@@ -28,7 +30,12 @@ from devin_memory.screen import (
     SECRET_PATTERNS,
     screen,
 )
-from devin_memory.store import Entry, MemoryStore, is_expired
+from devin_memory.store import (
+    Entry,
+    MemoryStore,
+    is_expired,
+    parse_expires_at,
+)
 
 
 class MemoryOpsError(RuntimeError):
@@ -65,8 +72,13 @@ def _find_conflict(store: MemoryStore, content: str) -> int | None:
 
     Same normalized subject key + opposite polarity — see
     :mod:`devin_memory.conflict` for the heuristic and its limits.
+    Expired entries are skipped: a contradiction to a memory recall
+    already hides is not a live conflict worth linking.
     """
+    now_ms = time.time() * 1000
     for entry in store.entries(status="active"):
+        if is_expired(entry, now_ms):
+            continue
         if is_conflict(content, entry.content):
             return entry.id
     return None
@@ -144,6 +156,12 @@ def _score(entry: Entry, terms: list[str]) -> float:
 RECALL_DECAY_HALF_LIFE_DAYS = 30.0
 _DAY_MS = 86_400_000
 
+# sentinel: ``half_life_days`` omitted means "read
+# :data:`RECALL_DECAY_HALF_LIFE_DAYS` at call time" — mutating the
+# constant after import tunes later calls, while an explicit ``None``
+# still disables decay
+_UNSET_HL: Any = object()
+
 
 def _recency_decay(
     entry: Entry, now_ms: float, half_life_days: float | None
@@ -166,7 +184,7 @@ def recall(
     tags: Iterable[str] | None = None,
     *,
     include_expired: bool = False,
-    half_life_days: float | None = RECALL_DECAY_HALF_LIFE_DAYS,
+    half_life_days: float | None = _UNSET_HL,
 ) -> list[Entry]:
     """Keyword-ranked recall over ``active`` entries only.
 
@@ -177,11 +195,18 @@ def recall(
     Relevance is the keyword score weighted by an exponential recency
     decay on ``created_at`` age (halving every ``half_life_days``), so
     fresher memories win ties and mildly outrank stronger-but-stale hits
-    as the gap in age grows. ``half_life_days=None`` (or 0) restores pure
-    score ordering. Empty ``query`` returns the most recent entries —
-    already recency-ordered, so decay changes nothing there. ``tags``
+    as the gap in age grows. Omit ``half_life_days`` to use
+    :data:`RECALL_DECAY_HALF_LIFE_DAYS` (read at call time, so it can be
+    tuned after import); ``half_life_days=None`` or ``0`` disables decay
+    and restores pure score ordering. A very short half-life can decay
+    a match's weight to 0.0 — eligibility is still decided by the raw
+    keyword score, so matches sink to the tail instead of disappearing.
+    Empty ``query`` returns the most recent entries — already
+    recency-ordered, so decay changes nothing there. ``tags``
     restricts to entries sharing at least one tag.
     """
+    if half_life_days is _UNSET_HL:
+        half_life_days = RECALL_DECAY_HALF_LIFE_DAYS
     now_ms = time.time() * 1000
     candidates = store.entries(status="active")
     if not include_expired:
@@ -194,11 +219,14 @@ def recall(
         ]
     terms = _terms(query)
     if terms:
+        raw = {e.id: _score(e, terms) for e in candidates}
         scored = {
-            e.id: _score(e, terms) * _recency_decay(e, now_ms, half_life_days)
+            e.id: raw[e.id] * _recency_decay(e, now_ms, half_life_days)
             for e in candidates
         }
-        ranked = [e for e in candidates if scored[e.id] > 0]
+        # raw score decides eligibility — a decayed-to-zero weight ranks
+        # last instead of dropping a real match
+        ranked = [e for e in candidates if raw[e.id] > 0]
         ranked.sort(key=lambda e: (-scored[e.id], -e.created_at, -e.id))
     else:
         ranked = candidates
@@ -662,10 +690,31 @@ def _dedup_groups(entries: list[Entry]) -> list[list[Entry]]:
     return [members for members in by_key.values() if len(members) > 1]
 
 
+def _expires_ms(entry: Entry) -> float:
+    """``expires_at`` as epoch ms; absent or malformed reads as
+    never-expiring (same fail-open rule as :func:`is_expired`)."""
+    if not entry.expires_at:
+        return math.inf
+    try:
+        return parse_expires_at(entry.expires_at)
+    except ValueError:
+        return math.inf
+
+
 def _dedup_survivor(members: list[Entry]) -> Entry:
+    # an expired survivor would leave recall with *no* live copy once
+    # the unexpired duplicates are retracted — prefer a live member,
+    # and among live ones the furthest expiry so the merged entry
+    # keeps the intended lifetime
+    now_ms = time.time() * 1000
     return min(
         members,
-        key=lambda e: (_COMPACT_STATUS_RANK.get(e.status, 99), e.id),
+        key=lambda e: (
+            _COMPACT_STATUS_RANK.get(e.status, 99),
+            is_expired(e, now_ms),
+            -_expires_ms(e),
+            e.id,
+        ),
     )
 
 
