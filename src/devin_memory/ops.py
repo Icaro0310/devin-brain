@@ -338,9 +338,12 @@ def supersede(
 
 
 def list_entries(
-    store: MemoryStore, status: str | None = None, limit: int | None = None
+    store: MemoryStore,
+    status: str | None = None,
+    limit: int | None = None,
+    since: float | None = None,
 ) -> list[Entry]:
-    return store.entries(status=status, limit=limit)
+    return store.entries(status=status, limit=limit, since=since)
 
 
 def verify_provenance(

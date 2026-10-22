@@ -13,6 +13,7 @@ put it in quarantine (kept even after release, for audit).
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -153,6 +154,48 @@ def is_expired(entry: Entry, now_ms: float | None = None) -> bool:
         return False
     now = time.time() * 1000 if now_ms is None else now_ms
     return expiry_ms <= now
+
+
+_RELATIVE_SINCE_RE = re.compile(r"^(\d+)([smhdw])$", re.IGNORECASE)
+_RELATIVE_UNIT_MS = {
+    "s": 1_000,
+    "m": 60_000,
+    "h": 3_600_000,
+    "d": 86_400_000,
+    "w": 604_800_000,
+}
+
+
+def parse_since(value: str, now_ms: float | None = None) -> float:
+    """Parse a ``--since`` spec into an epoch-ms ``created_at`` cutoff.
+
+    Two forms:
+
+    - a relative duration — ``30s``, ``15m``, ``24h``, ``7d``, ``2w``
+      (case-insensitive) — meaning "this far back from now";
+      ``now_ms`` is injectable for tests;
+    - an ISO-8601 date/datetime — same grammar and naive-means-UTC
+      convention as :func:`parse_expires_at`.
+
+    Anything else raises :class:`ValueError` so a typoed filter fails
+    loudly instead of silently widening to "everything".
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            "since must be a non-empty ISO-8601 date or duration"
+        )
+    text = value.strip()
+    m = _RELATIVE_SINCE_RE.match(text)
+    if m:
+        base = time.time() * 1000 if now_ms is None else now_ms
+        return base - int(m.group(1)) * _RELATIVE_UNIT_MS[m.group(2).lower()]
+    try:
+        return parse_expires_at(text)
+    except ValueError:
+        raise ValueError(
+            f"malformed since {value!r}: use an ISO-8601 date or a"
+            " duration like 24h / 7d"
+        ) from None
 
 
 class MemoryStore:
@@ -462,16 +505,26 @@ class MemoryStore:
         return _row_to_entry(row) if row is not None else None
 
     def entries(
-        self, status: str | None = None, limit: int | None = None
+        self,
+        status: str | None = None,
+        limit: int | None = None,
+        since: float | None = None,
     ) -> list[Entry]:
-        """Entries newest-first; optionally filtered by status."""
+        """Entries newest-first; optionally filtered by status and/or a
+        ``created_at >= since`` epoch-ms cutoff."""
         sql = "SELECT * FROM entries"
         args: list[Any] = []
+        clauses: list[str] = []
         if status is not None:
             if status not in VALID_STATUSES:
                 raise ValueError(f"invalid status {status!r}")
-            sql += " WHERE status = ?"
+            clauses.append("status = ?")
             args.append(status)
+        if since is not None:
+            clauses.append("created_at >= ?")
+            args.append(since)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY created_at DESC, id DESC"
         if limit is not None:
             sql += " LIMIT ?"

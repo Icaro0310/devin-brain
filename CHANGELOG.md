@@ -6,6 +6,18 @@
 
 ## Unreleased (F4)
 
+- **`--since` filter** — `devin-memory list` and `export` accept
+  `--since SPEC`, where SPEC is an ISO-8601 date/datetime or a relative
+  duration (`30s`, `15m`, `24h`, `7d`, `2w`; case-insensitive,
+  naive-means-UTC — same grammar as `--expires-at`). The cutoff is
+  applied at the query layer (`MemoryStore.entries(since=)`,
+  `created_at >=` clause) so every read surface can reuse it:
+  `ops.list_entries` and `export_jsonl` take a `since` epoch-ms, and
+  the MCP `list` tool takes the same `since` string the CLI accepts.
+  `export --all --since` still resolves `supersedes` chains — the
+  export-id map is always built over *all* rows. Malformed specs fail
+  loudly with `error: malformed since ...` (exit 1) instead of silently
+  widening to everything.
 - **`expires_at` + recall decay** — entries can carry an optional ISO-8601
   `expires_at` TTL (`retain --expires-at`, `supersede --expires-at`,
   `store.set_expires_at`; `supersede` inherits the old TTL by default).

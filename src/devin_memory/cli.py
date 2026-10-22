@@ -13,9 +13,9 @@ Subcommands:
 - ``approve <id>`` — promote a proposed extraction to active
 - ``prime [--workspace PATH] [--max-tokens N]`` — hook context block
 - ``retract <id>`` · ``supersede <id> "<content>" [--expires-at ISO]``
-  · ``list``
+  · ``list [--since SPEC]``
 - ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
-- ``export --out memories.jsonl [--all]``
+- ``export --out memories.jsonl [--all] [--since SPEC]``
 - ``verify <id> --sessions-db <sessions.db>``
 
 The DB is ``./memory.db`` by default — override with the global ``--db``
@@ -38,7 +38,7 @@ from devin_internals.schema import SchemaError
 
 from devin_memory import ops
 from devin_memory.export import export_jsonl
-from devin_memory.store import Entry, MemoryStore
+from devin_memory.store import Entry, MemoryStore, parse_since
 
 DEFAULT_DB = "memory.db"
 
@@ -218,8 +218,11 @@ def cmd_supersede(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
+    since_ms = parse_since(args.since) if args.since else None
     with _open_store(args) as store:
-        entries = ops.list_entries(store, status=args.status, limit=args.limit)
+        entries = ops.list_entries(
+            store, status=args.status, limit=args.limit, since=since_ms
+        )
     if args.json:
         _print_json([e.to_dict() for e in entries])
     elif entries:
@@ -230,8 +233,11 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
+    since_ms = parse_since(args.since) if args.since else None
     with _open_store(args) as store:
-        n = export_jsonl(store, args.out, include_non_active=args.all)
+        n = export_jsonl(
+            store, args.out, include_non_active=args.all, since=since_ms
+        )
     print(f"exported {n} entries -> {args.out}")
     return 0
 
@@ -462,6 +468,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["active", "proposed", "quarantined", "retracted"],
     )
     p.add_argument("--limit", type=int, metavar="N")
+    p.add_argument(
+        "--since", metavar="SPEC",
+        help="only entries created on/after an ISO-8601 date or a "
+             "relative duration like 24h, 7d")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_list)
 
@@ -470,6 +480,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="output file (memory-MCP-compatible JSONL)")
     p.add_argument("--all", action="store_true",
                    help="include quarantined and retracted entries")
+    p.add_argument(
+        "--since", metavar="SPEC",
+        help="only entries created on/after an ISO-8601 date or a "
+             "relative duration like 24h, 7d")
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser(
