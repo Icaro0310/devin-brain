@@ -70,18 +70,22 @@ def export_jsonl(
     out: str | Path,
     *,
     include_non_active: bool = False,
+    since: float | None = None,
 ) -> int:
     """Dump entries to ``out`` (one JSON object per line). Returns count.
 
     Expired entries are skipped by default — an importer must not
     receive a stale memory as an ordinary live one; ``--all``
     (``include_non_active``) keeps them for auditing. Live entries keep
-    their ``expires_at`` so importers preserve the lifetime.
+    their ``expires_at`` so importers preserve the lifetime. ``since``
+    is an epoch-ms ``created_at`` cutoff (see
+    :func:`devin_memory.store.parse_since` for the CLI grammar) — only
+    entries created on/after it are exported.
     """
     entries = (
-        store.entries()
+        store.entries(since=since)
         if include_non_active
-        else store.entries(status="active")
+        else store.entries(status="active", since=since)
     )
     if not include_non_active:
         now_ms = time.time() * 1000

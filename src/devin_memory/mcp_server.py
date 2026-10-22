@@ -9,7 +9,7 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
                   entries excluded unless ``include_expired``; recency
                   decay favors fresh memories
 - ``screen``      dry-run the quarantine gate — no write
-- ``list``        list entries by status
+- ``list``        list entries by status and/or creation cutoff
 - ``retract``     withdraw an entry (kept for history)
 - ``supersede``   replace an entry with a corrected version
 - ``quarantine``  move an entry to the quarantine lane
@@ -47,7 +47,7 @@ from pathlib import Path
 
 from devin_memory import ops
 from devin_memory.screen import screen as _screen
-from devin_memory.store import MemoryStore
+from devin_memory.store import MemoryStore, parse_since
 
 DEFAULT_DB = "memory.db"
 
@@ -105,10 +105,11 @@ def do_screen(content: str, tags="") -> dict:
     return {"status": result.status, "reasons": list(result.reasons)}
 
 
-def do_list(status: str = "", limit: int = 20) -> list[dict]:
+def do_list(status: str = "", limit: int = 20, since: str = "") -> list[dict]:
+    since_ms = parse_since(since) if since else None
     with _store() as store:
         entries = ops.list_entries(
-            store, status=status or None, limit=limit)
+            store, status=status or None, limit=limit, since=since_ms)
     return [e.to_dict() for e in entries]
 
 
@@ -257,10 +258,11 @@ def build_server():
         return _guarded(do_screen)(content, tags)
 
     @server.tool()
-    def list(status: str = "", limit: int = 20) -> list[dict]:
+    def list(status: str = "", limit: int = 20, since: str = "") -> list[dict]:
         """List memory entries, optionally by status (active, proposed,
-        quarantined, retracted)."""
-        return _guarded(do_list)(status, limit)
+        quarantined, retracted) and/or a ``since`` creation cutoff —
+        ISO-8601 date or a relative duration like ``24h`` / ``7d``."""
+        return _guarded(do_list)(status, limit, since)
 
     @server.tool()
     def retract(entry_id: int) -> dict:
