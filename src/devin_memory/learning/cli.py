@@ -12,6 +12,11 @@ from pathlib import Path
 from devin_internals.schema import SchemaError
 
 from . import __version__
+from .catalog_bridge import (
+    CatalogBridgeError,
+    bridge,
+    default_registry_path,
+)
 from .extract import extract_candidates, scan_watermark
 from .report import build_report, render_markdown, write_report
 from .review import review_candidates, review_text
@@ -104,6 +109,35 @@ def _build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="quarantine rejected drafts into <out>/_rejected/",
+    )
+
+    bridge_p = sub.add_parser(
+        "catalog-bridge",
+        help="register learned-*/SKILL.md drafts into the skill-catalog "
+        "registry as `proposed` entries (write→gate→promote bridge)",
+    )
+    bridge_p.add_argument(
+        "skills_dir",
+        type=Path,
+        help="dir holding learned-<topic>/SKILL.md drafts — a .devin dir "
+        "wrapping skills/ is accepted too",
+    )
+    bridge_p.add_argument(
+        "--registry",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="skill-catalog registry file (default: "
+        "<config-dir>/.devin-ecosystem/skill-catalog.json, resolved like "
+        "devin-skill-catalog — DEVIN_CONFIG_DIR wins)",
+    )
+    bridge_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report planned registry changes; write nothing",
+    )
+    bridge_p.add_argument(
+        "--json", action="store_true", help="print the JSON report to stdout"
     )
     return parser
 
@@ -239,6 +273,45 @@ def _cmd_review(args: argparse.Namespace) -> int:
     return 1 if rejected else 0
 
 
+def _cmd_catalog_bridge(args: argparse.Namespace) -> int:
+    registry = args.registry or default_registry_path()
+    try:
+        report = bridge(args.skills_dir, registry, dry_run=args.dry_run)
+    except (CatalogBridgeError, OSError) as exc:
+        print(f"devin-learning: {exc}", file=sys.stderr)
+        return 3
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=True))
+        return 0
+    if report["scanned"] == 0:
+        print(
+            f"catalog-bridge: no learned-* skills under "
+            f"{report['skills_root']}"
+        )
+        return 0
+    for name in report["registered"]:
+        print(f"  + skill:{name}  -> proposed")
+    for name in report["updated"]:
+        print(f"  ~ skill:{name}  proposed (sha256/origin refreshed)")
+    for name in report["unchanged"]:
+        print(f"  = skill:{name}  unchanged")
+    for skipped in report["skipped"]:
+        print(
+            f"  ! skill:{skipped['name']}  skipped "
+            f"(state={skipped['state']})"
+        )
+    print(
+        f"catalog-bridge: {report['scanned']} scanned — "
+        f"{len(report['registered'])} registered, "
+        f"{len(report['updated'])} updated, "
+        f"{len(report['unchanged'])} unchanged, "
+        f"{len(report['skipped'])} skipped"
+    )
+    note = " (dry-run — nothing written)" if args.dry_run else ""
+    print(f"  registry: {report['registry']}{note}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "extract":
@@ -247,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_weekly(args)
     if args.command == "review":
         return _cmd_review(args)
+    if args.command == "catalog-bridge":
+        return _cmd_catalog_bridge(args)
     return 2
 
 

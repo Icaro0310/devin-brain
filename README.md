@@ -263,6 +263,32 @@ devin-learning extract --sessions-db path/to/sessions.db --out .devin/skills --a
 drafts under `_rejected/`. The extractor reads session contents, so keep its
 output private until reviewed.
 
+Once drafts sit in a skills tree, `catalog-bridge` registers them into the
+[devin-skill-catalog](https://github.com/Icaro0310/devin-devkit) registry as
+`proposed` entries — closing the write→gate→promote loop:
+
+```bash
+# scans .devin/skills/learned-*/SKILL.md and registers each as `proposed`
+devin-learning catalog-bridge .devin/skills
+
+# then the catalog gates and promotes them (its own CLI):
+devin-skill-catalog quarantine skill:learned-testing . --apply
+devin-skill-catalog promote  skill:learned-testing --apply
+devin-skill-catalog activate skill:learned-testing --apply
+```
+
+The registry defaults to
+`<config-dir>/.devin-ecosystem/skill-catalog.json` (resolved like
+`devin-skill-catalog`; `DEVIN_CONFIG_DIR` wins) — override with
+`--registry`. Entries carry metadata only (`kind`, `name`, `state`,
+`sha256` of the SKILL.md, `origin` dir, empty `history`) — draft bodies are
+never copied. The bridge is deterministic and idempotent: re-scanning an
+unchanged draft changes nothing, an edited draft refreshes `sha256`, and
+items the catalog already moved past `proposed` are reported as skipped and
+left untouched. `--dry-run` prints the plan without writing. See
+[docs/skill-catalog-bridge.md](docs/skill-catalog-bridge.md) for the
+contract.
+
 For a shareable summary there is `weekly-report` — the public surface of the
 loop. It emits `weekly-YYYY-Www.md` with aggregate counts only (lessons by
 theme, promoted `learned-*` skills, quarantine-pending buckets): no session
