@@ -171,6 +171,8 @@
 
 - **CI** — `actions/checkout` bumped from 4.4.0 to 7.0.1 in
   `release-memory.yml` (Dependabot).
+- **CI** — `actions/setup-python` bumped from 7.0.0 to 7.1.0 in `ci.yml`
+  (Dependabot).
 
 ## 0.3.0
 
