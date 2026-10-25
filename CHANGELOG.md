@@ -6,6 +6,11 @@
 
 ## Unreleased (F4)
 
+- **CI** — repin the `pr-approve` gate caller to
+  `Icaro0310/devin-powerups/.github/workflows/pr-approve.yml@v1.9`: the
+  self-cancel fix (a successful approval no longer renders as a failed
+  check), plus the fresh-head recheck and paginated dedup picked up
+  since the v1.6 pin.
 - **`devin-learning catalog-bridge`** — bridge from the learning loop to
   the skill-catalog: scans `learned-*/SKILL.md` drafts and registers each
   as a `proposed` entry in the devin-skill-catalog registry
