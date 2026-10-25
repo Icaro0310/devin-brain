@@ -6,6 +6,19 @@
 
 ## Unreleased (F4)
 
+- **`devin-learning catalog-bridge`** — bridge from the learning loop to
+  the skill-catalog: scans `learned-*/SKILL.md` drafts and registers each
+  as a `proposed` entry in the devin-skill-catalog registry
+  (`<config-dir>/.devin-ecosystem/skill-catalog.json`, `--registry`
+  overrides, `DEVIN_CONFIG_DIR`-aware resolution identical to the
+  catalog's). Entries are metadata only — `kind`/`name`/`state`/`sha256`
+  of the SKILL.md/`origin` dir/empty `history` — and the file is written
+  byte-compatibly with `devin_skill_catalog.registry` (same schema,
+  `sort_keys`+`indent=2`, atomic tempfile+replace). Deterministic and
+  idempotent; drafts the catalog already moved past `proposed` are
+  skipped, never reset. `--dry-run` reports the plan; malformed
+  frontmatter (missing `name`/`description`, name≠dir, no `---` block)
+  fails naming the file. See `docs/skill-catalog-bridge.md`.
 - **`--since` filter** — `devin-memory list` and `export` accept
   `--since SPEC`, where SPEC is an ISO-8601 date/datetime or a relative
   duration (`30s`, `15m`, `24h`, `7d`, `2w`; case-insensitive,
