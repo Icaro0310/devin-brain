@@ -12,12 +12,13 @@ Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`)
 - ``list``        list entries by status and/or creation cutoff
 - ``retract``     withdraw an entry (kept for history)
 - ``supersede``   replace an entry with a corrected version
-- ``quarantine``  move an entry to the quarantine lane
+- ``quarantine``  move an entry to the quarantine lane (``hold_supersede``
+                  restores the superseded parent — opt-in, below)
 - ``release``     human override: quarantined -> active (opt-in, below)
 - ``approve``     promote a proposed extraction to active (opt-in, below)
 - ``conflicts``   contradiction pairs linked at retain time
 - ``prime``       compact recalled-context block for a workspace
-- ``verify``      audit an entry's provenance against a sessions.db
+- ``verify``      audit an entry's provenance seal + optional sessions.db
 - ``extract``     mine a session into proposed entries
 - ``compact``     dedup live entries (dry-run unless ``apply``)
 - ``quarantine_digest``  deterministic audit hash of the quarantine lane
@@ -27,9 +28,10 @@ registered when the operator launches the server with
 ``DEVIN_MEMORY_MCP_PROMOTE=1``, so an AI-driven client cannot
 self-promote quarantined or proposed content past the anti-poisoning
 lane. The same flag also gates ``extract``'s ``auto_approve``
-parameter, which would otherwise bypass the review step. Humans use
-``devin-memory quarantine --release ID`` and ``devin-memory approve ID``
-directly.
+parameter, which would otherwise bypass the review step, and
+``quarantine``'s ``hold_supersede``, which restores a superseded parent
+to active. Humans use ``devin-memory quarantine --release ID`` and
+``devin-memory approve ID`` directly.
 
 The DB is ``./memory.db`` by default — ``--db PATH`` or the
 ``DEVIN_MEMORY_DB`` env var override it, exactly like the CLI.
@@ -126,10 +128,12 @@ def do_supersede(entry_id: int, content: str, tags="",
             expires_at=expires_at or None).to_dict()
 
 
-def do_quarantine(entry_id: int, reason: str = "") -> dict:
+def do_quarantine(entry_id: int, reason: str = "",
+                  hold_supersede: bool = False) -> dict:
     with _store() as store:
         return ops.quarantine_entry(
-            store, entry_id, reason=reason or "manual:mcp").to_dict()
+            store, entry_id, reason=reason or "manual:mcp",
+            hold_supersede=hold_supersede).to_dict()
 
 
 def do_release(entry_id: int) -> dict:
@@ -157,9 +161,9 @@ def do_prime(workspace: str = "", max_tokens: int = 0) -> dict:
     return {"text": text}
 
 
-def do_verify(entry_id: int, sessions_db: str) -> dict:
+def do_verify(entry_id: int, sessions_db: str = "") -> dict:
     with _store() as store:
-        return ops.verify_provenance(store, entry_id, sessions_db)
+        return ops.verify_provenance(store, entry_id, sessions_db or None)
 
 
 def do_extract(sessions_db: str, session_id: str = "",
@@ -277,9 +281,16 @@ def build_server():
         return _guarded(do_supersede)(entry_id, content, tags, expires_at)
 
     @server.tool()
-    def quarantine(entry_id: int, reason: str = "") -> dict:
-        """Move an entry to the quarantine lane (review hold)."""
-        return _guarded(do_quarantine)(entry_id, reason)
+    def quarantine(entry_id: int, reason: str = "",
+                   hold_supersede: bool = False) -> dict:
+        """Move an entry to the quarantine lane (review hold). On a
+        supersession successor, ``hold_supersede`` also restores the
+        superseded parent to active while the successor is reviewed —
+        restoring a row is promotion-shaped, so the flag is ignored
+        unless the server runs with DEVIN_MEMORY_MCP_PROMOTE=1."""
+        return _guarded(do_quarantine)(
+            entry_id, reason,
+            hold_supersede and _promotion_enabled())
 
     # Human overrides — gated: absent unless the operator opts in, so an
     # AI client cannot promote content past the quarantine lane.
@@ -307,9 +318,11 @@ def build_server():
         return _guarded(do_prime)(workspace, max_tokens)
 
     @server.tool()
-    def verify(entry_id: int, sessions_db: str) -> dict:
-        """Audit an entry's provenance against a Devin sessions.db
-        (read-only)."""
+    def verify(entry_id: int, sessions_db: str = "") -> dict:
+        """Audit an entry's provenance: always checks the write-time
+        provenance seal (VERIFIED_SEALED / UNSEALED / TAMPER_SUSPECT),
+        and cross-checks source_session_id/source_rowid when a
+        sessions.db path is given (read-only)."""
         return _guarded(do_verify)(entry_id, sessions_db)
 
     @server.tool()

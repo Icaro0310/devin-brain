@@ -72,9 +72,14 @@ size/shape limits) so suspect content never reaches `active` without a human.
 
 - `recall`/`list`/`quarantine --json` emit `Entry` dicts:
   `{id, content, tags[], source_session_id, source_rowid, created_at (ms),
-  status, version, supersedes_id, quarantine_reasons[]}`.
+  status, version, supersedes_id, quarantine_reasons[], provenance_hash}`.
 - `verify` emits `{entry_id, sessions_db, source_session_id, source_rowid,
-  checked, session_found, rowid_found}`; exit 0 iff provenance checks out.
+  checked, session_found, rowid_found, provenance_hash, seal_status,
+  recomputed_hash}`; `seal_status` ∈ {`VERIFIED_SEALED`, `UNSEALED`,
+  `TAMPER_SUSPECT`} — the write-time sha256 over the insert-frozen columns,
+  recomputed and compared (`--sessions-db` is optional; the seal check is
+  local). Exit 1 on `TAMPER_SUSPECT`, or — when `--sessions-db` is given —
+  on any failed session/rowid lookup.
 - `export` emits one JSON object per line, memory-MCP-compatible:
   `{id (12-hex, stable), ts, iso, content, tags, source: "session:<id>" |
   "devin-memory"}` plus optional `source_rowid`, `version`, `supersedes`
@@ -84,12 +89,26 @@ size/shape limits) so suspect content never reaches `active` without a human.
 
 - `retain` always screens first; `status` on insert is the gate's verdict.
 - `release` (`quarantine --release`) is an explicit human override —
-  quarantined→active; the reasons stay on the row for audit.
-- `supersede` atomically retracts the old row and inserts the successor with
-  `version+1`/`supersedes_id`; the replacement is screened like any retain
-  (if it quarantines, the old version is still retired — review the queue).
+  quarantined→active; the reasons stay on the row for audit. On a held
+  supersession it completes the chain: an `active` superseded parent is
+  retired in the same transaction.
+- `supersede` inserts the successor with `version+1`/`supersedes_id` and
+  — when the screened replacement stays `active` — retracts the old row
+  atomically. If the replacement quarantines, the supersession is *held*:
+  the old version remains `active` until `release` applies the
+  supersession or `retract` rejects it. `quarantine <id>
+  --hold-supersede` performs the same hold after the fact (restores a
+  `retracted` parent to `active`); an entry with a pending hold cannot
+  be superseded again until it is resolved.
 - `retracted` covers both user-retracted and superseded rows; the
   `supersedes_id` link on the newer row distinguishes them.
+- `provenance_hash` seals the insert-frozen columns (content, source ids,
+  `created_at`, machine/profile/workspace, `conflicts_with`, version,
+  `supersedes_id`) — sha256 of a versioned canonical JSON, tamper-*evident*
+  not self-verifying: it detects post-hoc edits, it does not prove the
+  recorded source was truthful. Lifecycle columns (`status`, reasons,
+  `tags`, `expires_at`) are unsealed so routine transitions never read as
+  tampering; rows predating the column verify as `UNSEALED`.
 
 ## 8. Fixtures and tests (TDD — fixtures first)
 

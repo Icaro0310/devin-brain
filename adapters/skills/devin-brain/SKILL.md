@@ -24,7 +24,10 @@ When this plugin's MCP server is connected, use the memory tools:
 - `conflicts()` — show conflicting memory pairs.
 - `prime(workspace?, max_tokens?)` — context block of relevant memories
   for the current workspace.
-- `verify(entry_id, sessions_db)` — check an entry's provenance.
+- `verify(entry_id, sessions_db?)` — check an entry's provenance: the
+  write-time seal always runs (`VERIFIED_SEALED`/`UNSEALED`/
+  `TAMPER_SUSPECT`); pass `sessions_db` to also cross-check the claimed
+  source session/rowid.
 
 Typical flow: `prime` or `recall` when starting a task; `retain` when
 you learned something durable (a decision, a gotcha, a convention).

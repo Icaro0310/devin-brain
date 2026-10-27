@@ -75,10 +75,16 @@ Updated: 2026-10-04 · Milestone: **F4 (done)** · Version: 0.2.0+unreleased
 
 - `retracted` covers user-retracted *and* superseded rows (spec lists
   exactly 3 statuses); the successor's `supersedes_id` distinguishes them.
-- Superseding with quarantined content still retires the old version —
-  the replacement waits in the queue; documented in SPEC §7/README.
+- Superseding with quarantined content *holds* the supersession — the old
+  version stays `active` until `release` applies it or `retract` rejects
+  it (fixes the ≤0.3.1 caveat). `quarantine <id> --hold-supersede` holds
+  an already-applied supersession after the fact and repairs pre-fix rows.
 - Release keeps `quarantine_reasons` on the row — release is an audit
   event, not an erasure.
+- `provenance_hash` seals the insert-frozen columns per row (sha256,
+  tamper-evident — not proof the source was truthful); `verify` reports
+  `VERIFIED_SEALED`/`UNSEALED`/`TAMPER_SUSPECT` and `--sessions-db` is
+  now optional.
 - Export ids are derived from `(rowid, created_at)` — stable across
   re-exports, content-independent.
 

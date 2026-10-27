@@ -11,9 +11,9 @@ Agent memory is a poisoning vector: any tool persisting "facts" between sessions
 ## Key commands
 - `devin-memory retain "fact" --tags a,b [--source-session <id> --source-rowid <n>] [--expires-at <iso>]`: store a screened fact (optional TTL)
 - `devin-memory recall "query" [--json] [--limit 5] [--include-expired]`: keyword-ranked recall of active, unexpired entries with recency decay
-- `devin-memory quarantine` / `--release <id>` / `--digest`: list, release, or audit-hash the quarantine lane (digest is read-only, no content)
+- `devin-memory quarantine <id> [--hold-supersede]` / `--release <id>` / `--digest`: mark, hold a supersession (old version stays active until release/retract), release, or audit-hash the lane (digest is read-only, no content)
 - `devin-memory supersede <id> "corrected fact"` / `retract <id>` / `compact [--apply]`: versioning and housekeeping (compact dedups; dry-run first)
-- `devin-memory verify <id> --sessions-db <path>`: audit an entry's claimed provenance (read-only)
+- `devin-memory verify <id> [--sessions-db <path>]`: audit an entry's provenance — the write-time sha256 seal always runs (VERIFIED_SEALED/UNSEALED/TAMPER_SUSPECT); sessions.db cross-check is optional
 - `devin-memory export --out memories.jsonl`: export active memories in memory-MCP-compatible JSONL
 - `devin-learning extract --sessions-db <path> --out ./learning-drafts`: draft lessons from sessions
 - `devin-learning review --out ./learning-drafts`: review drafts (dry-run unless `--apply`)

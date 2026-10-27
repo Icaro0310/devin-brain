@@ -158,12 +158,14 @@ def test_supersede_keeps_history(store):
     assert [e.id for e in ops.recall(store, "schema")] == [new.id]
 
 
-def test_supersede_quarantined_new_still_retires_old(store):
+def test_supersede_quarantined_new_holds_old_active(store):
     old = ops.retain(store, CLEAN_FACT)
     new = ops.supersede(store, old.id, SECRET_FACT)
     assert new.status == "quarantined"
     assert new.version == 2
-    assert store.get(old.id).status == "retracted"
+    # the supersession is held, not applied — the old version stays live
+    # until the quarantined replacement is released or rejected
+    assert store.get(old.id).status == "active"
 
 
 def test_supersede_requires_active_source(store):

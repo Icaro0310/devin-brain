@@ -12,10 +12,12 @@ put it in quarantine (kept even after release, for audit).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
 import time
+from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -43,7 +45,8 @@ CREATE TABLE IF NOT EXISTS entries (
   profile TEXT,
   conflicts_with INTEGER REFERENCES entries(id),
   workspace TEXT,
-  expires_at TEXT
+  expires_at TEXT,
+  provenance_hash TEXT
 );
 """
 
@@ -63,6 +66,7 @@ _MIGRATED_COLUMNS = {
     "conflicts_with": "INTEGER",
     "workspace": "TEXT",
     "expires_at": "TEXT",
+    "provenance_hash": "TEXT",
 }
 
 
@@ -85,6 +89,11 @@ class Entry:
     conflicts_with: int | None = None
     workspace: str | None = None
     expires_at: str | None = None  # ISO-8601; None = never expires
+    # sha256 over the sealed provenance columns (see
+    # :func:`compute_provenance_hash`); None on rows written before the
+    # seal existed — those verify as ``UNSEALED``, never silently
+    # upgraded.
+    provenance_hash: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -110,6 +119,7 @@ def _row_to_entry(r: sqlite3.Row) -> Entry:
         conflicts_with=r["conflicts_with"],
         workspace=r["workspace"],
         expires_at=r["expires_at"],
+        provenance_hash=r["provenance_hash"],
     )
 
 
@@ -196,6 +206,63 @@ def parse_since(value: str, now_ms: float | None = None) -> float:
             f"malformed since {value!r}: use an ISO-8601 date or a"
             " duration like 24h / 7d"
         ) from None
+
+
+# ---------------------------------------------------------------------------
+# provenance seal (tamper-evident, computed at write time)
+# ---------------------------------------------------------------------------
+
+# Version tag inside the sealed payload — a future scheme bump keeps old
+# hashes verifiable instead of silently recomputing to something else.
+PROVENANCE_SEAL_VERSION = 1
+
+# Columns frozen at insert: they have no mutation path anywhere in the
+# store API, so editing one can only mean post-hoc tampering. Mutable
+# columns are deliberately excluded — ``status``/``quarantine_reasons``
+# (review lifecycle), ``tags`` (``set_tags`` merges) and ``expires_at``
+# (``set_expires_at``) change legitimately, and a routine transition must
+# never read as tampering.
+SEALED_FIELDS = (
+    "content",
+    "source_session_id",
+    "source_rowid",
+    "created_at",
+    "machine_id",
+    "profile",
+    "workspace",
+    "conflicts_with",
+    "version",
+    "supersedes_id",
+)
+
+
+def compute_provenance_hash(fields: Mapping[str, Any]) -> str:
+    """sha256 over a canonical serialization of the sealed columns.
+
+    The canonical form is compact sorted-key JSON carrying the seal
+    version, so two stores holding the same record hash identically.
+    This makes provenance **tamper-evident**: a hand-edited row (changed
+    ``content``, rewritten ``source_session_id``, ...) recomputes to a
+    different digest than the stored ``provenance_hash``. It is not a
+    proof of source truth — a row written with a fabricated
+    ``source_session_id`` seals cleanly; only the ``--sessions-db``
+    audit can call that out.
+    """
+    sealed = {name: fields.get(name) for name in SEALED_FIELDS}
+    canonical = json.dumps(
+        {"v": PROVENANCE_SEAL_VERSION, "sealed": sealed},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def entry_provenance_hash(entry: Entry) -> str:
+    """The seal an ``Entry``'s columns should carry — what ``verify``
+    recomputes to compare against the stored ``provenance_hash``."""
+    return compute_provenance_hash(
+        {name: getattr(entry, name) for name in SEALED_FIELDS}
+    )
 
 
 class MemoryStore:
@@ -341,13 +408,27 @@ class MemoryStore:
             machine_id = machine_id if machine_id is not None else prov["machine_id"]
             profile = profile if profile is not None else prov["profile"]
         created_at = int(time.time() * 1000)
+        provenance_hash = compute_provenance_hash(
+            {
+                "content": content,
+                "source_session_id": source_session_id,
+                "source_rowid": source_rowid,
+                "created_at": created_at,
+                "machine_id": machine_id,
+                "profile": profile,
+                "workspace": workspace,
+                "conflicts_with": conflicts_with,
+                "version": version,
+                "supersedes_id": supersedes_id,
+            }
+        )
         with self._unit():
             cur = self._con.execute(
                 "INSERT INTO entries(content, tags, source_session_id,"
                 " source_rowid, created_at, status, version, supersedes_id,"
                 " quarantine_reasons, machine_id, profile, conflicts_with,"
-                " workspace, expires_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " workspace, expires_at, provenance_hash)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     content,
                     json.dumps(list(tags)),
@@ -363,6 +444,7 @@ class MemoryStore:
                     conflicts_with,
                     workspace,
                     expires_at,
+                    provenance_hash,
                 ),
             )
         entry = self.get(cur.lastrowid)
@@ -441,12 +523,19 @@ class MemoryStore:
         profile: str | None = None,
         workspace: str | None = None,
         expires_at: str | None = None,
+        hold_old: bool = False,
     ) -> Entry:
-        """Atomically retract ``old_id`` and insert its successor (version+1).
+        """Insert ``old_id``'s successor (version+1); retract it unless held.
 
         ``expires_at=None`` inherits the old row's TTL (successors keep
         the same expiry, like workspace); pass a new ISO value to change
         it, and :meth:`set_expires_at` on the new id to clear it.
+
+        ``hold_old=True`` makes this a *held* supersession: the old row
+        keeps its status instead of being retracted, so a superseded
+        memory stays live while its replacement waits in quarantine.
+        Releasing the successor then retires the old row; rejecting the
+        successor leaves it untouched.
         """
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}")
@@ -464,17 +553,32 @@ class MemoryStore:
         if workspace is None:
             workspace = old.workspace  # successors keep the same scope
         created_at = int(time.time() * 1000)
+        provenance_hash = compute_provenance_hash(
+            {
+                "content": content,
+                "source_session_id": source_session_id,
+                "source_rowid": source_rowid,
+                "created_at": created_at,
+                "machine_id": machine_id,
+                "profile": profile,
+                "workspace": workspace,
+                "conflicts_with": None,
+                "version": old.version + 1,
+                "supersedes_id": old_id,
+            }
+        )
         with self._unit():
-            self._con.execute(
-                "UPDATE entries SET status = 'retracted' WHERE id = ?",
-                (old_id,),
-            )
+            if not hold_old:
+                self._con.execute(
+                    "UPDATE entries SET status = 'retracted' WHERE id = ?",
+                    (old_id,),
+                )
             cur = self._con.execute(
                 "INSERT INTO entries(content, tags, source_session_id,"
                 " source_rowid, created_at, status, version, supersedes_id,"
                 " quarantine_reasons, machine_id, profile, conflicts_with,"
-                " workspace, expires_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " workspace, expires_at, provenance_hash)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     content,
                     json.dumps(list(tags)),
@@ -490,6 +594,7 @@ class MemoryStore:
                     None,
                     workspace,
                     expires_at,
+                    provenance_hash,
                 ),
             )
         entry = self.get(cur.lastrowid)

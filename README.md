@@ -125,7 +125,11 @@ devin-memory recall "ci status" --include-expired  # also surface expired
 # Quarantine lane: list, mark an existing entry, or release one
 devin-memory quarantine                          # list with reasons
 devin-memory quarantine <id> [--reason manual:x] # mark entry as quarantined
+devin-memory quarantine <id> --hold-supersede    # mark + hold the supersession:
+                                                 # the superseded parent returns
+                                                 # to active until release/retract
 devin-memory quarantine --release <id>           # human override -> active
+                                                 # (applies a held supersession)
 devin-memory quarantine --digest [--json]        # audit hash (read-only)
 
 # Contradictions: a conflicting retain is linked, not overwritten
@@ -153,8 +157,9 @@ devin-memory list [--status active|proposed|quarantined|retracted] [--json]
 devin-memory compact [--json]   # dedup report (dry-run)
 devin-memory compact --apply    # retract copies + vacuum the file
 
-# Audit an entry's provenance against a real sessions.db (read-only)
-devin-memory verify <id> --sessions-db path/to/sessions.db
+# Audit an entry's provenance: the write-time seal always runs; with
+# --sessions-db it also cross-checks source_session_id/source_rowid
+devin-memory verify <id> [--sessions-db path/to/sessions.db]
 
 # Export active memories to a memory-MCP-compatible JSONL
 devin-memory export --out memories.jsonl
@@ -225,8 +230,10 @@ Tools: `retain`, `recall`, `screen` (dry-run the gate, no write), `list`,
 and `approve` promotion overrides are only registered when the server runs
 with `DEVIN_MEMORY_MCP_PROMOTE=1` — otherwise promotion stays human-only via
 the CLI (`devin-memory quarantine --release <id>` / `devin-memory approve
-<id>`). The same flag gates `extract`'s `auto_approve` parameter, which is
-forced off without the opt-in so an AI client cannot skip the review step.
+<id>`). The same flag gates `extract`'s `auto_approve` parameter and
+`quarantine`'s `hold_supersede` (restoring a superseded parent is
+promotion-shaped), both forced off without the opt-in so an AI client cannot
+skip the review step.
 Every tool returns structured data or a `{"error", "detail"}`
 object — nothing raises through the transport. `DEVIN_MEMORY_DB` works as an
 alternative to `--db`.
@@ -307,6 +314,13 @@ devin-learning weekly-report --sessions-db path/to/sessions.db --out ./docs/lear
 (screened or manually flagged, awaiting `release`) · `retracted` (withdrawn or
 superseded). Only `active` entries surface in `recall`/`prime`/`export` —
 quarantined content is never printed and never recalled.
+
+A `supersede` whose replacement screens into quarantine is **held**: the
+superseded version stays `active` — and keeps surfacing in recall — until
+`release` applies the supersession or `retract` rejects it. The same hold
+works after the fact via `quarantine <id> --hold-supersede`, which returns
+the already-retired parent to `active` while the successor is reviewed.
+While a hold is pending the entry cannot be superseded again.
 
 An `active` entry can also carry `expires_at` (ISO-8601, set at `retain`/
 `supersede` or changed via `set_expires_at`): once the instant passes the
@@ -412,12 +426,19 @@ and Linux are supported and covered by CI.
   (gitleaks, `devin-redact`) too — this complements them.
 - **Recall ranking is keyword-based**, deterministic and documented — no
   embeddings or semantic search in M1.
-- **Provenance is recorded, not self-verifying.** `retain` stores the
-  claimed `source_session_id`/`source_rowid`; `verify` audits it against a
-  real `sessions.db` afterwards. A bad actor can claim fake provenance —
-  the point is that it is *checkable*.
-- **Quarantined supersessions still retire the old version.** If the
-  replacement quarantines, review the queue (`quarantine --release`).
+- **Provenance is tamper-evident, not self-verifying.** Every write seals
+  the insert-frozen columns (content, `source_*`, `created_at`,
+  machine/profile/workspace, chain position) into `provenance_hash` —
+  `verify` recomputes it: `VERIFIED_SEALED` on a match,
+  `TAMPER_SUSPECT` on any post-hoc edit (fails the audit even when the
+  sessions.db half passes), `UNSEALED` on pre-seal rows. The seal proves
+  the row wasn't modified after the fact; it does **not** prove the
+  recorded source was truthful — a fabricated `source_session_id` seals
+  cleanly. `--sessions-db` remains the cross-check for that claim.
+- **A pending hold blocks re-superseding.** An entry whose replacement
+  is still quarantined can't be superseded again until the hold is
+  resolved (`release`/`retract`), so two quarantined forks never compete
+  over one parent.
 - **PyPI distributions:** `devin-memory` for the CLI and optional MCP extra; `devin-memory-mcp` is the standalone MCP-registry package.
 
 ## When to use this
