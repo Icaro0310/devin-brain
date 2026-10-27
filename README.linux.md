@@ -50,8 +50,3 @@ Equivalent `systemd --user` timer works too; enable lingering if it must run wit
 ## Troubleshooting
 
 - If a command is not found, ensure the `uv` tools directory is on `PATH` and run `uv tool update-shell`.
-- If `devin-memory-mcp` exits with `error: The MCP server needs the 'mcp' extra`
-  (VS Code reports the server exiting with code 1), a bare `devin-memory`
-  install is on PATH — `uv tool install` does not add extras to an existing
-  tool. Force-reinstall with the extra: `uv tool install --force 'devin-memory[mcp]'`
-  (or `pipx install --force devin-memory-mcp` for the shim).
