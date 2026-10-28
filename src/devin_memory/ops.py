@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -488,6 +489,184 @@ def prime(
     if not shown:
         lines.append("(no active memories)")
     return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# prime: generated ecosystem state (--state-md)
+# ---------------------------------------------------------------------------
+
+PRIME_STATE_HEADER = "## ecosystem state"
+PRIME_STATE_DEFAULT_MAX_CHARS = 2000
+PRIME_STATE_ENV_VAR = "DEVIN_ECOSYSTEM_STATE"
+PRIME_STATE_TRUNC_MARK = "…(truncated)"
+
+# Probe order when --state-md is not passed: the env var, then the
+# devin-powerups checkout's generated report, then a repo-local
+# reports/ dir. First readable file wins.
+_STATE_HOME_RELATIVE = (
+    "devin/devin-ecosystem/devin-powerups/reports/current-state.md"
+)
+_STATE_LOCAL_RELATIVE = "reports/current-state.md"
+
+_STATE_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+_STATE_TS_RE = re.compile(r"\b(generated|last updated|as of)\b", re.I)
+_STATE_TS_SCAN_LINES = 15
+_STATE_SECTION_RES = (
+    ("drift", re.compile(r"\bdrift\b", re.I)),
+    ("health", re.compile(r"\b(health|services?)\b", re.I)),
+    ("prs", re.compile(r"\b(prs?|pull requests?)\b", re.I)),
+)
+_STATE_SECTION_TITLES = {
+    "drift": "drift",
+    "health": "service health",
+    "prs": "open PRs",
+}
+
+
+def _state_candidates() -> list[Path]:
+    """Probe order for the generated state file (first hit wins)."""
+    candidates: list[Path] = []
+    env = os.environ.get(PRIME_STATE_ENV_VAR)
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates.append(Path.home() / _STATE_HOME_RELATIVE)
+    candidates.append(Path(_STATE_LOCAL_RELATIVE))
+    return candidates
+
+
+def _read_state(
+    state_md: str | Path | None,
+) -> tuple[Path | None, str | None, str | None]:
+    """Resolve and read the state file; return (path, text, error).
+
+    An explicit ``state_md`` is the only candidate tried — the flag is an
+    override, not a hint. Without it, every candidate is probed in order
+    and unreadable ones are skipped so a stale env var can't mask a good
+    default file.
+    """
+    if state_md:
+        path = Path(state_md).expanduser()
+        try:
+            return path, path.read_text(encoding="utf-8"), None
+        except FileNotFoundError:
+            return path, None, f"not found: {path}"
+        except UnicodeDecodeError:
+            return path, None, f"unreadable (not utf-8): {path}"
+        except OSError as exc:
+            return path, None, f"unreadable: {exc.strerror or exc}"
+    for path in _state_candidates():
+        try:
+            return path, path.read_text(encoding="utf-8"), None
+        except (OSError, UnicodeDecodeError):
+            continue
+    return None, None, "no state file in search path"
+
+
+def _parse_state_md(text: str) -> tuple[str | None, dict[str, list[str]]]:
+    """Extract the generated-timestamp line and drift/health/PR rows.
+
+    Tolerant by design: headings are matched by keyword, rows are kept
+    verbatim (tables stay valid markdown), and any line among the first
+    ``_STATE_TS_SCAN_LINES`` mentioning "generated"/"last updated"/"as of"
+    becomes the timestamp — the generator's exact layout may evolve.
+    """
+    generated: str | None = None
+    sections: dict[str, list[str]] = {
+        key: [] for key, _rx in _STATE_SECTION_RES
+    }
+    current: str | None = None
+    for lineno, raw in enumerate(text.splitlines()):
+        line = raw.rstrip()
+        heading = _STATE_HEADING_RE.match(line)
+        if heading:
+            title = heading.group(1)
+            current = next(
+                (
+                    key
+                    for key, rx in _STATE_SECTION_RES
+                    if rx.search(title)
+                ),
+                None,
+            )
+            continue
+        if not line.strip():
+            continue
+        if generated is None and lineno < _STATE_TS_SCAN_LINES:
+            # match the keyword on the undecorated text — emphasis chars
+            # like "_" are word chars and would defeat \b
+            clean = line.strip().strip("*_# ").strip()
+            if _STATE_TS_RE.search(clean):
+                generated = clean
+                continue
+        if current is not None:
+            sections[current].append(line)
+    return generated, sections
+
+
+def _cap_lines(lines: list[str], max_chars: int) -> str:
+    """Join ``lines`` capped at ``max_chars`` (incl. trailing newline).
+
+    The cut happens at a line boundary and a ``…(truncated)`` marker line
+    is appended, so the block stays injectable at a fixed size. A cap of
+    0 or less means "no cap".
+    """
+    body = "\n".join(lines) + "\n"
+    if max_chars <= 0 or len(body) <= max_chars:
+        return body
+    mark = PRIME_STATE_TRUNC_MARK
+    budget = max(1, max_chars - len(mark) - 2)  # marker line + newlines
+    kept: list[str] = []
+    used = 0
+    for line in lines:
+        need = len(line) + (1 if kept else 0)
+        if used + need > budget:
+            break
+        kept.append(line)
+        used += need
+    if not kept:  # absurdly small cap: hard-truncate the header itself
+        kept = [lines[0][:budget]] if lines else []
+    return "\n".join(kept) + "\n" + mark + "\n"
+
+
+def prime_state(
+    *,
+    state_md: str | Path | None = None,
+    max_chars: int = PRIME_STATE_DEFAULT_MAX_CHARS,
+) -> str:
+    """Render the generated-ecosystem-state block for ``prime`` (fail-open).
+
+    Reads a generated state report (``current-state.md``) — resolved from
+    ``state_md``, else ``$DEVIN_ECOSYSTEM_STATE``, else the devin-powerups
+    checkout's ``reports/current-state.md``, else ``./reports/`` — and
+    emits a compact markdown section carrying the generated timestamp,
+    drift rows, service-health lines and open PRs, capped at
+    ``max_chars`` with a ``…(truncated)`` marker.
+
+    A missing or unreadable file is not an error: the returned text is a
+    one-line ``state: unavailable (<reason>)`` notice, so callers that
+    append the block to prompts or rules files never break on absent
+    state.
+    """
+    path, text, error = _read_state(state_md)
+    if error is not None:
+        return f"state: unavailable ({error})\n"
+    generated, sections = _parse_state_md(text or "")
+    lines = [PRIME_STATE_HEADER]
+    if generated:
+        lines.append(generated)
+    lines.append(f"source: {path}")
+    found = False
+    for key, _rx in _STATE_SECTION_RES:
+        rows = sections[key]
+        if not rows:
+            continue
+        found = True
+        lines.append("")
+        lines.append(f"### {_STATE_SECTION_TITLES[key]}")
+        lines.extend(rows)
+    if not found:
+        lines.append("(no drift/health/PR sections found)")
+    return _cap_lines(lines, max_chars)
 
 
 # ---------------------------------------------------------------------------
