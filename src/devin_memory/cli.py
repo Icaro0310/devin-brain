@@ -3,8 +3,9 @@
 Subcommands:
 
 - ``retain "<content>" [--tags a,b] [--workspace PATH]``
-  ``[--source-session ID] [--source-rowid N]``
-- ``recall "<query>" [--limit N] [--tags a,b] [--json]``
+  ``[--source-session ID] [--source-rowid N] [--expires-at ISO]``
+- ``recall "<query>" [--limit N] [--tags a,b] [--include-expired]``
+  ``[--json]``
 - ``quarantine [<id>] [--reason r] [--list] [--release ID] [--digest]``
   ``[--json]``
 - ``conflicts [--json]`` — contradiction pairs linked at retain time
@@ -12,9 +13,10 @@ Subcommands:
 - ``approve <id>`` — promote a proposed extraction to active
 - ``prime [--workspace PATH] [--max-tokens N] [--state-md PATH]
   [--max-chars N]`` — hook context block + generated ecosystem state
-- ``retract <id>`` · ``supersede <id> "<content>"`` · ``list``
+- ``retract <id>`` · ``supersede <id> "<content>" [--expires-at ISO]``
+  · ``list [--since SPEC]``
 - ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
-- ``export --out memories.jsonl [--all]``
+- ``export --out memories.jsonl [--all] [--since SPEC]``
 - ``verify <id> --sessions-db <sessions.db>``
 
 The DB is ``./memory.db`` by default — override with the global ``--db``
@@ -37,7 +39,7 @@ from devin_internals.schema import SchemaError
 
 from devin_memory import ops
 from devin_memory.export import export_jsonl
-from devin_memory.store import Entry, MemoryStore
+from devin_memory.store import Entry, MemoryStore, parse_since
 
 DEFAULT_DB = "memory.db"
 
@@ -104,6 +106,7 @@ def cmd_retain(args: argparse.Namespace) -> int:
             source_session_id=args.source_session,
             source_rowid=args.source_rowid,
             workspace=args.workspace,
+            expires_at=args.expires_at,
         )
     if args.json:
         _print_json(entry.to_dict())
@@ -120,7 +123,9 @@ def cmd_retain(args: argparse.Namespace) -> int:
 def cmd_recall(args: argparse.Namespace) -> int:
     with _open_store(args) as store:
         hits = ops.recall(
-            store, args.query, limit=args.limit, tags=_tags_arg(args.tags) or None
+            store, args.query, limit=args.limit,
+            tags=_tags_arg(args.tags) or None,
+            include_expired=args.include_expired,
         )
     if args.json:
         _print_json([e.to_dict() for e in hits])
@@ -200,7 +205,8 @@ def cmd_retract(args: argparse.Namespace) -> int:
 def cmd_supersede(args: argparse.Namespace) -> int:
     with _open_store(args) as store:
         entry = ops.supersede(
-            store, args.id, args.content, tags=_tags_arg(args.tags) or None
+            store, args.id, args.content, tags=_tags_arg(args.tags) or None,
+            expires_at=args.expires_at,
         )
     if args.json:
         _print_json(entry.to_dict())
@@ -213,8 +219,11 @@ def cmd_supersede(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
+    since_ms = parse_since(args.since) if args.since else None
     with _open_store(args) as store:
-        entries = ops.list_entries(store, status=args.status, limit=args.limit)
+        entries = ops.list_entries(
+            store, status=args.status, limit=args.limit, since=since_ms
+        )
     if args.json:
         _print_json([e.to_dict() for e in entries])
     elif entries:
@@ -225,8 +234,11 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
+    since_ms = parse_since(args.since) if args.since else None
     with _open_store(args) as store:
-        n = export_jsonl(store, args.out, include_non_active=args.all)
+        n = export_jsonl(
+            store, args.out, include_non_active=args.all, since=since_ms
+        )
     print(f"exported {n} entries -> {args.out}")
     return 0
 
@@ -407,6 +419,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Devin session id this memory came from")
     p.add_argument("--source-rowid", type=int, metavar="N",
                    help="message_nodes rowid the fact is evidenced by")
+    p.add_argument("--expires-at", metavar="ISO", dest="expires_at",
+                   help="ISO-8601 expiry — after it passes the entry stops"
+                        " surfacing in recall/prime (default: never)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_retain)
 
@@ -414,6 +429,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("query", help="free-text query; '' returns most recent")
     p.add_argument("--limit", type=int, default=5, metavar="N")
     p.add_argument("--tags", metavar="a,b", help="restrict to these tags")
+    p.add_argument("--include-expired", action="store_true",
+                   help="also return entries past their expires_at")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_recall)
 
@@ -444,6 +461,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("content", help="the corrected content")
     p.add_argument("--tags", metavar="a,b",
                    help="tags for the new version (default: inherit)")
+    p.add_argument("--expires-at", metavar="ISO", dest="expires_at",
+                   help="expiry for the new version (default: inherit)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_supersede)
 
@@ -453,6 +472,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["active", "proposed", "quarantined", "retracted"],
     )
     p.add_argument("--limit", type=int, metavar="N")
+    p.add_argument(
+        "--since", metavar="SPEC",
+        help="only entries created on/after an ISO-8601 date or a "
+             "relative duration like 24h, 7d")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.set_defaults(func=cmd_list)
 
@@ -461,6 +484,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="output file (memory-MCP-compatible JSONL)")
     p.add_argument("--all", action="store_true",
                    help="include quarantined and retracted entries")
+    p.add_argument(
+        "--since", metavar="SPEC",
+        help="only entries created on/after an ISO-8601 date or a "
+             "relative duration like 24h, 7d")
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser(

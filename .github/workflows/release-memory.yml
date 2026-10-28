@@ -42,8 +42,12 @@ jobs:
   # versioned independently and is not bound to `memory-v*` tags.
   validate:
     runs-on: ubuntu-latest
+    # Read-only job: narrows the top-level `contents: write` + `actions:
+    # write` down to what a tag/manifest comparison actually needs.
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check tag matches extension manifest
         if: github.ref_type == 'tag'
@@ -62,9 +66,9 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -96,8 +100,27 @@ jobs:
       # `release.published` event — GitHub blocks recursive workflow
       # triggers from the same token — so pypi-publish.yml would never
       # fire on its own and the PyPI leg would be silently lost.
-      # Dispatch it explicitly on the tag instead.
+      # Dispatch it explicitly on the tag instead — but ONLY on a
+      # confirmed 404 (wheel unpublished): a lookup outage yields
+      # `published=unknown` and skips the dispatch rather than firing a
+      # redundant one that can fail the job. The dispatch itself is
+      # continue-on-error: a PyPI-side failure must not take the
+      # unrelated extension fanout down with it.
+      - name: Check wheel already on PyPI
+        id: wheel
+        run: |
+          v=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/devin-memory/$v/json" || echo 000)
+          case "$code" in
+            200) echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "published=unknown" >> "$GITHUB_OUTPUT"
+                 echo "::warning::PyPI lookup returned HTTP $code — skipping wheel dispatch" ;;
+          esac
+
       - name: Trigger PyPI publish workflow
+        if: steps.wheel.outputs.published == 'false'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -120,6 +143,7 @@ jobs:
     secrets:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
     with:
+      azure-marketplace-required: true
       # Extension-only release: adapters/vscode has no pyproject.toml,
       # so detect marks has-wheel=false and the verify/PyPI/docker legs
       # skip. Pointing at "." instead would read the root wheel

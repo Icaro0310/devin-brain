@@ -8,6 +8,7 @@
 <a href="https://m8ven.ai/mcp/icaro0310-devin-memory-xgy2rx?s=readme"><img src="https://m8ven.ai/badge/mcp/icaro0310-devin-memory-xgy2rx" alt="M8ven Score"/></a>
 <a href="https://glama.ai/mcp/servers/Icaro0310/devin-brain"><img src="https://glama.ai/mcp/servers/Icaro0310/devin-brain/badges/score.svg" alt="Glama Score"/></a>
 <a href="https://mcpservers.org/servers/icaro0310/devin-memory"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"/></a>
+<a href="https://mcprush.com/to/devin-memory-mcp?ref=badge"><img src="https://mcprush.com/badge/devin-memory-mcp/score.svg" alt="mcprush Score"/></a>
 <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-blueviolet" alt="MCP Registry"/></a>
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"/></a>
@@ -113,9 +114,13 @@ pytest
 devin-memory retain "CI is green on Windows + Linux" --tags ci,status
 devin-memory retain "..." --source-session <session-id> --source-rowid <n>
 devin-memory retain "..." --workspace /path/to/project   # scope to a workspace
+devin-memory retain "..." --expires-at 2026-12-31T00:00:00Z  # TTL: drops
+                                   # out of recall/prime after this instant
 
-# Keyword-ranked recall — returns active entries only
+# Keyword-ranked recall — returns active, unexpired entries only;
+# scores are weighted by recency decay so fresh memories outrank stale ones
 devin-memory recall "ci status" [--json] [--limit 5] [--tags a,b]
+devin-memory recall "ci status" --include-expired  # also surface expired
 
 # Quarantine lane: list, mark an existing entry, or release one
 devin-memory quarantine                          # list with reasons
@@ -141,7 +146,8 @@ devin-memory prime [--workspace PATH] [--max-tokens N]
                    [--state-md PATH] [--max-chars N]
 
 # Versioning and housekeeping
-devin-memory supersede <id> "corrected fact"
+devin-memory supersede <id> "corrected fact" [--expires-at <iso>]
+                                          # default: inherit old expiry
 devin-memory retract <id>
 devin-memory list [--status active|proposed|quarantined|retracted] [--json]
 devin-memory compact [--json]   # dedup report (dry-run)
@@ -169,11 +175,10 @@ pipx install "devin-memory-mcp"
 The `devin-memory-mcp` console script also ships inside the base
 `devin-memory` dist, so a bare `uv tool install devin-memory` (no extra)
 leaves a script that exits with `error: The MCP server needs the 'mcp'
-extra`. If you see that, reinstall with the extra:
-`uv tool install 'devin-memory[mcp]'` — or use the shim above, which
-pulls `devin-memory[mcp]` transitively. VS Code's built-in MCP support
-and the `devin-memory` extension hit the same PATH script, so the same
-note applies when the editor reports the server exiting with code 1.
+extra` — recovery steps live in the Troubleshooting section of each
+platform guide ([Linux](README.linux.md),
+[Personal Windows](README.windows.md),
+[Corporate Windows](README.corporate-windows.md)).
 
 Client config:
 
@@ -260,6 +265,32 @@ devin-learning extract --sessions-db path/to/sessions.db --out .devin/skills --a
 drafts under `_rejected/`. The extractor reads session contents, so keep its
 output private until reviewed.
 
+Once drafts sit in a skills tree, `catalog-bridge` registers them into the
+[devin-skill-catalog](https://github.com/Icaro0310/devin-devkit) registry as
+`proposed` entries — closing the write→gate→promote loop:
+
+```bash
+# scans .devin/skills/learned-*/SKILL.md and registers each as `proposed`
+devin-learning catalog-bridge .devin/skills
+
+# then the catalog gates and promotes them (its own CLI):
+devin-skill-catalog quarantine skill:learned-testing . --apply
+devin-skill-catalog promote  skill:learned-testing --apply
+devin-skill-catalog activate skill:learned-testing --apply
+```
+
+The registry defaults to
+`<config-dir>/.devin-ecosystem/skill-catalog.json` (resolved like
+`devin-skill-catalog`; `DEVIN_CONFIG_DIR` wins) — override with
+`--registry`. Entries carry metadata only (`kind`, `name`, `state`,
+`sha256` of the SKILL.md, `origin` dir, empty `history`) — draft bodies are
+never copied. The bridge is deterministic and idempotent: re-scanning an
+unchanged draft changes nothing, an edited draft refreshes `sha256`, and
+items the catalog already moved past `proposed` are reported as skipped and
+left untouched. `--dry-run` prints the plan without writing. See
+[docs/skill-catalog-bridge.md](docs/skill-catalog-bridge.md) for the
+contract.
+
 For a shareable summary there is `weekly-report` — the public surface of the
 loop. It emits `weekly-YYYY-Www.md` with aggregate counts only (lessons by
 theme, promoted `learned-*` skills, quarantine-pending buckets): no session
@@ -276,6 +307,16 @@ devin-learning weekly-report --sessions-db path/to/sessions.db --out ./docs/lear
 (screened or manually flagged, awaiting `release`) · `retracted` (withdrawn or
 superseded). Only `active` entries surface in `recall`/`prime`/`export` —
 quarantined content is never printed and never recalled.
+
+An `active` entry can also carry `expires_at` (ISO-8601, set at `retain`/
+`supersede` or changed via `set_expires_at`): once the instant passes the
+entry is excluded from `recall`/`prime` — excluded, not deleted, so it stays
+visible in `list`/`export --all` for audit (`recall --include-expired`
+opts out). Entries without `expires_at` never expire. Separately, `recall`
+applies an exponential recency decay to keyword scores (half-life 30 days,
+`ops.RECALL_DECAY_HALF_LIFE_DAYS`, tunable per call via `half_life_days`) —
+fresher memories win close calls while clearly stronger stale hits still
+rank first.
 
 ## Conflicts, extraction and prime (heuristics)
 

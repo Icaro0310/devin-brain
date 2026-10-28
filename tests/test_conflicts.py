@@ -56,6 +56,19 @@ def test_different_subject_is_not_a_conflict(store):
     assert ops.conflicts(store) == []
 
 
+def test_expired_entry_is_not_a_conflict_source(store):
+    # a contradiction to a memory recall already hides is not a live
+    # conflict — expired entries stay out of the link heuristic
+    from datetime import datetime, timedelta, timezone
+    expired_stamp = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).isoformat()
+    ops.retain(store, ALWAYS_PYTEST, expires_at=expired_stamp)
+    new = ops.retain(store, NEVER_PYTEST)
+    assert new.conflicts_with is None
+    assert ops.conflicts(store) == []
+
+
 def test_identical_content_is_a_duplicate_not_a_conflict(store):
     ops.retain(store, ALWAYS_PYTEST)
     dup = ops.retain(store, ALWAYS_PYTEST)

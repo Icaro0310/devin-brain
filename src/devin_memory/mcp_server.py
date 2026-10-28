@@ -3,10 +3,13 @@ exposed to any MCP client (Devin, Claude Desktop, Cursor) over stdio.
 
 Tools (same semantics as the CLI — all logic lives in :mod:`devin_memory.ops`):
 
-- ``retain``      screen + store a memory (quarantine gate applies)
-- ``recall``      keyword-ranked recall, active entries only
+- ``retain``      screen + store a memory (quarantine gate applies;
+                  optional ``expires_at`` ISO-8601 TTL)
+- ``recall``      keyword-ranked recall, active entries only — expired
+                  entries excluded unless ``include_expired``; recency
+                  decay favors fresh memories
 - ``screen``      dry-run the quarantine gate — no write
-- ``list``        list entries by status
+- ``list``        list entries by status and/or creation cutoff
 - ``retract``     withdraw an entry (kept for history)
 - ``supersede``   replace an entry with a corrected version
 - ``quarantine``  move an entry to the quarantine lane
@@ -44,7 +47,7 @@ from pathlib import Path
 
 from devin_memory import ops
 from devin_memory.screen import screen as _screen
-from devin_memory.store import MemoryStore
+from devin_memory.store import MemoryStore, parse_since
 
 DEFAULT_DB = "memory.db"
 
@@ -73,21 +76,25 @@ def _tags(raw) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def do_retain(content: str, tags="", workspace: str = "",
-              source_session: str = "", source_rowid: int | None = None) -> dict:
+              source_session: str = "", source_rowid: int | None = None,
+              expires_at: str = "") -> dict:
     with _store() as store:
         entry = ops.retain(
             store, content, tags=_tags(tags),
             source_session_id=source_session or None,
             source_rowid=source_rowid,
             workspace=workspace or None,
+            expires_at=expires_at or None,
         )
     return entry.to_dict()
 
 
-def do_recall(query: str = "", limit: int = 5, tags="") -> list[dict]:
+def do_recall(query: str = "", limit: int = 5, tags="",
+              include_expired: bool = False) -> list[dict]:
     with _store() as store:
         hits = ops.recall(store, query, limit=limit,
-                          tags=_tags(tags) or None)
+                          tags=_tags(tags) or None,
+                          include_expired=include_expired)
     return [e.to_dict() for e in hits]
 
 
@@ -98,10 +105,11 @@ def do_screen(content: str, tags="") -> dict:
     return {"status": result.status, "reasons": list(result.reasons)}
 
 
-def do_list(status: str = "", limit: int = 20) -> list[dict]:
+def do_list(status: str = "", limit: int = 20, since: str = "") -> list[dict]:
+    since_ms = parse_since(since) if since else None
     with _store() as store:
         entries = ops.list_entries(
-            store, status=status or None, limit=limit)
+            store, status=status or None, limit=limit, since=since_ms)
     return [e.to_dict() for e in entries]
 
 
@@ -110,10 +118,12 @@ def do_retract(entry_id: int) -> dict:
         return ops.retract(store, entry_id).to_dict()
 
 
-def do_supersede(entry_id: int, content: str, tags="") -> dict:
+def do_supersede(entry_id: int, content: str, tags="",
+                 expires_at: str = "") -> dict:
     with _store() as store:
         return ops.supersede(
-            store, entry_id, content, tags=_tags(tags) or None).to_dict()
+            store, entry_id, content, tags=_tags(tags) or None,
+            expires_at=expires_at or None).to_dict()
 
 
 def do_quarantine(entry_id: int, reason: str = "") -> dict:
@@ -221,18 +231,25 @@ def build_server():
     @server.tool()
     def retain(content: str, tags: str = "", workspace: str = "",
                source_session: str = "",
-               source_rowid: int | None = None) -> dict:
+               source_rowid: int | None = None,
+               expires_at: str = "") -> dict:
         """Screen and store a durable memory. The quarantine gate runs on
         every write — entries flagged secret:/injection:/limit:/shape:
-        land in quarantine, never in recall. Returns the stored entry."""
+        land in quarantine, never in recall. ``expires_at`` is an
+        optional ISO-8601 TTL — past it, the entry stops surfacing in
+        recall/prime (the row stays for audit). Returns the stored
+        entry."""
         return _guarded(do_retain)(
-            content, tags, workspace, source_session, source_rowid)
+            content, tags, workspace, source_session, source_rowid,
+            expires_at)
 
     @server.tool()
-    def recall(query: str = "", limit: int = 5, tags: str = "") -> list[dict]:
-        """Keyword-ranked recall over active memories only — quarantined
-        and retracted entries never leak into context."""
-        return _guarded(do_recall)(query, limit, tags)
+    def recall(query: str = "", limit: int = 5, tags: str = "",
+               include_expired: bool = False) -> list[dict]:
+        """Keyword-ranked recall over active memories only — quarantined,
+        retracted and expired entries never leak into context unless
+        ``include_expired`` is set. Recency decay favors fresh memories."""
+        return _guarded(do_recall)(query, limit, tags, include_expired)
 
     @server.tool()
     def screen(content: str, tags: str = "") -> dict:
@@ -241,10 +258,11 @@ def build_server():
         return _guarded(do_screen)(content, tags)
 
     @server.tool()
-    def list(status: str = "", limit: int = 20) -> list[dict]:
+    def list(status: str = "", limit: int = 20, since: str = "") -> list[dict]:
         """List memory entries, optionally by status (active, proposed,
-        quarantined, retracted)."""
-        return _guarded(do_list)(status, limit)
+        quarantined, retracted) and/or a ``since`` creation cutoff —
+        ISO-8601 date or a relative duration like ``24h`` / ``7d``."""
+        return _guarded(do_list)(status, limit, since)
 
     @server.tool()
     def retract(entry_id: int) -> dict:
@@ -252,9 +270,11 @@ def build_server():
         return _guarded(do_retract)(entry_id)
 
     @server.tool()
-    def supersede(entry_id: int, content: str, tags: str = "") -> dict:
-        """Replace an entry with a corrected version (versioned)."""
-        return _guarded(do_supersede)(entry_id, content, tags)
+    def supersede(entry_id: int, content: str, tags: str = "",
+                  expires_at: str = "") -> dict:
+        """Replace an entry with a corrected version (versioned);
+        ``expires_at`` overrides the TTL, empty keeps the old one."""
+        return _guarded(do_supersede)(entry_id, content, tags, expires_at)
 
     @server.tool()
     def quarantine(entry_id: int, reason: str = "") -> dict:

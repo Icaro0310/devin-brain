@@ -6,6 +6,76 @@
 
 ## Unreleased (F4)
 
+- **CI** — repin the `pr-approve` gate caller to
+  `Icaro0310/devin-powerups/.github/workflows/pr-approve.yml@v1.9`: the
+  self-cancel fix (a successful approval no longer renders as a failed
+  check), plus the fresh-head recheck and paginated dedup picked up
+  since the v1.6 pin.
+- **`devin-learning catalog-bridge`** — bridge from the learning loop to
+  the skill-catalog: scans `learned-*/SKILL.md` drafts and registers each
+  as a `proposed` entry in the devin-skill-catalog registry
+  (`<config-dir>/.devin-ecosystem/skill-catalog.json`, `--registry`
+  overrides, `DEVIN_CONFIG_DIR`-aware resolution identical to the
+  catalog's). Entries are metadata only — `kind`/`name`/`state`/`sha256`
+  of the SKILL.md/`origin` dir/empty `history` — and the file is written
+  byte-compatibly with `devin_skill_catalog.registry` (same schema,
+  `sort_keys`+`indent=2`, atomic tempfile+replace). Deterministic and
+  idempotent; drafts the catalog already moved past `proposed` are
+  skipped, never reset. `--dry-run` reports the plan; malformed
+  frontmatter (missing `name`/`description`, name≠dir, no `---` block)
+  fails naming the file. See `docs/skill-catalog-bridge.md`.
+- **`--since` filter** — `devin-memory list` and `export` accept
+  `--since SPEC`, where SPEC is an ISO-8601 date/datetime or a relative
+  duration (`30s`, `15m`, `24h`, `7d`, `2w`; case-insensitive,
+  naive-means-UTC — same grammar as `--expires-at`). The cutoff is
+  applied at the query layer (`MemoryStore.entries(since=)`,
+  `created_at >=` clause) so every read surface can reuse it:
+  `ops.list_entries` and `export_jsonl` take a `since` epoch-ms, and
+  the MCP `list` tool takes the same `since` string the CLI accepts.
+  `export --all --since` still resolves `supersedes` chains — the
+  export-id map is always built over *all* rows. Malformed specs fail
+  loudly with `error: malformed since ...` (exit 1) instead of silently
+  widening to everything.
+- **`expires_at` + recall decay** — entries can carry an optional ISO-8601
+  `expires_at` TTL (`retain --expires-at`, `supersede --expires-at`,
+  `store.set_expires_at`; `supersede` inherits the old TTL by default).
+  An entry past its expiry is *excluded* from `recall`/`prime` — never
+  deleted, so it stays auditable via `list`/`export --all`, and
+  `recall --include-expired` / `include_expired=True` opts out. The same
+  filtered-view rule now reaches the other read surfaces: default
+  `export` skips expired rows (live rows keep their `expires_at` so
+  importers preserve the lifetime), the retain-time conflict scan
+  ignores expired entries, and `compact` prefers a live survivor with
+  the furthest expiry so dedup cannot retract the only live copy.
+  Writes
+  validate eagerly (`ValueError` on malformed input); a malformed value
+  that only exists via a hand-edited row fails open rather than silently
+  dropping the memory. `recall` also weights keyword scores by
+  exponential recency decay — half-life 30 days
+  (`ops.RECALL_DECAY_HALF_LIFE_DAYS`, per-call `half_life_days`, `None`
+  disables) — so fresh memories win close calls without drowning clearly
+  stronger stale hits. The column is an additive migration; old
+  `memory.db` files open unchanged and never expire. Also exposed as
+  `expires_at`/`include_expired` on the MCP `retain`/`recall` tools.
+- **CI** — `pr-approve` caller bumped from v1.3 to v1.6 in
+  `auto-approve.yml` (the v1.6 gate adds cross-repo fix anchors and
+  gate-eligible concurrency) and gains the `pull_request_review_comment`
+  trigger so fix-commit replies re-run the gate on the same head;
+  `tests/test_auto_approve_workflow.py` pins the caller contract.
+- **CI** — the test job installs `pyyaml` (imported by
+  `tests/test_release_workflow.py` but never declared in the install
+  step) and enables `core.longpaths` on Windows runners, where pip's
+  git clone of `devin-internals-spec` previously failed checkout on
+  MAX_PATH and the sibling dependency never installed.
+
+- **Docs** — the missing-`mcp`-extra recovery moved from the shared
+  README to the platform guides' Troubleshooting sections, and now
+  notes that adding the extra to an existing tool needs `--force`
+  (`uv tool install --force 'devin-memory[mcp]'`).
+
+- **Docs** — README badge row gains the mcprush security badge
+  (independent `A` grade listing), next to the other registry badges.
+
 - **`prime --state-md` / `--max-chars`** — `devin-memory prime` now appends
   a compact `## ecosystem state` block rendered from a generated
   `current-state.md` (timestamp, drift rows, service-health lines, open
@@ -112,6 +182,9 @@
 
 - **Docs** — platform guides and the README install commands no longer pin a release; they install the latest published version.
 - **Fix** — `devin_memory.learning.__version__` is now the submodule's own version (synced with the package release) instead of the root `devin_memory.__version__`; it drives `devin-learning --version` and the `version` field in extract/review reports. Corrects the 0.3.0 note that attributed those outputs to the root module.
+
+- **CI** — `actions/checkout` bumped from 4.4.0 to 7.0.1 in
+  `release-memory.yml` (Dependabot).
 
 ## 0.3.0
 

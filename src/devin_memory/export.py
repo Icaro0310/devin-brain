@@ -7,8 +7,9 @@ writes ``.devin/memory/memories.jsonl``)::
      "content": "...", "tags": [...], "source": "session:<id>"}
 
 Optional extra keys are added when present: ``source_rowid``,
-``version``, ``supersedes`` (the export id of the superseded entry).
-Consumers that only know the base shape can ignore them.
+``expires_at``, ``version``, ``supersedes`` (the export id of the
+superseded entry). Consumers that only know the base shape can ignore
+them.
 
 Only ``active`` entries are exported by default — quarantined and
 retracted rows never leave the store unless ``include_non_active``
@@ -19,10 +20,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 
-from devin_memory.store import Entry, MemoryStore
+from devin_memory.store import Entry, MemoryStore, is_expired
 
 
 def _export_id(entry: Entry) -> str:
@@ -54,6 +56,8 @@ def _to_line(entry: Entry, export_ids: dict[int, str]) -> dict:
     }
     if entry.source_rowid is not None:
         row["source_rowid"] = entry.source_rowid
+    if entry.expires_at:
+        row["expires_at"] = entry.expires_at
     if entry.version > 1:
         row["version"] = entry.version
     if entry.supersedes_id is not None:
@@ -66,13 +70,26 @@ def export_jsonl(
     out: str | Path,
     *,
     include_non_active: bool = False,
+    since: float | None = None,
 ) -> int:
-    """Dump entries to ``out`` (one JSON object per line). Returns count."""
+    """Dump entries to ``out`` (one JSON object per line). Returns count.
+
+    Expired entries are skipped by default — an importer must not
+    receive a stale memory as an ordinary live one; ``--all``
+    (``include_non_active``) keeps them for auditing. Live entries keep
+    their ``expires_at`` so importers preserve the lifetime. ``since``
+    is an epoch-ms ``created_at`` cutoff (see
+    :func:`devin_memory.store.parse_since` for the CLI grammar) — only
+    entries created on/after it are exported.
+    """
     entries = (
-        store.entries()
+        store.entries(since=since)
         if include_non_active
-        else store.entries(status="active")
+        else store.entries(status="active", since=since)
     )
+    if not include_non_active:
+        now_ms = time.time() * 1000
+        entries = [e for e in entries if not is_expired(e, now_ms)]
     # ids over *all* rows so `supersedes` chains resolve even when the
     # predecessor is retracted and therefore not exported itself
     export_ids = {e.id: _export_id(e) for e in store.entries()}
