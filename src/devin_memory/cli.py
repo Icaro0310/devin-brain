@@ -16,6 +16,9 @@ Subcommands:
   · ``list [--since SPEC]``
 - ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
 - ``export --out memories.jsonl [--all] [--since SPEC]``
+- ``diff A.db B.db [--all] [--json]`` — read-only added/removed/changed
+  between two stores, keyed by export id (exit 0 identical ·
+  1 divergent · 2 unreadable db)
 - ``verify <id> --sessions-db <sessions.db>``
 
 The DB is ``./memory.db`` by default — override with the global ``--db``
@@ -37,6 +40,7 @@ from typing import Any, Sequence
 from devin_internals.schema import SchemaError
 
 from devin_memory import ops
+from devin_memory.diff import DiffError, diff_stores, render_text
 from devin_memory.export import export_jsonl
 from devin_memory.store import Entry, MemoryStore, parse_since
 
@@ -240,6 +244,26 @@ def cmd_export(args: argparse.Namespace) -> int:
         )
     print(f"exported {n} entries -> {args.out}")
     return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """``diff A.db B.db`` — pure read; exit 1 when the stores diverge."""
+    try:
+        report = diff_stores(args.a, args.b, include_non_active=args.all)
+    except FileNotFoundError as exc:
+        print(
+            f"error: {exc.filename or exc}: no such file",
+            file=sys.stderr,
+        )
+        return 2
+    except DiffError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json(report)
+    else:
+        print(render_text(report))
+    return 1 if report["different"] else 0
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -485,6 +509,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="only entries created on/after an ISO-8601 date or a "
              "relative duration like 24h, 7d")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser(
+        "diff",
+        help="added/removed/changed between two memory.db files, "
+        "keyed by export id — strictly read-only (no migrations, "
+        "no writes; exit 1 on divergence, 2 on unreadable db)",
+    )
+    p.add_argument("a", metavar="A.DB", help="first (base) memory.db")
+    p.add_argument("b", metavar="B.DB", help="second memory.db")
+    p.add_argument("--all", action="store_true",
+                   help="compare all statuses (default: active only, "
+                        "matching the export file shape)")
+    p.add_argument("--json", action="store_true", help="JSON output")
+    p.set_defaults(func=cmd_diff)
 
     p = sub.add_parser(
         "verify", help="audit an entry's provenance against a sessions.db"
