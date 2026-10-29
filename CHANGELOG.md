@@ -6,6 +6,38 @@
 
 ## Unreleased (F4)
 
+- **Held supersessions + `quarantine <id> --hold-supersede`** — fixes the
+  documented caveat "quarantined supersessions still retire the old
+  version". A `supersede` whose replacement screens into quarantine no
+  longer retires the superseded memory: the supersession is *held* — the
+  old version stays `active` (and in `recall`/`prime`) until `release`
+  applies the supersession (the active parent is retired in the same
+  transaction) or `retract` rejects it. `quarantine <id>
+  --hold-supersede` performs the same hold after the fact on an applied
+  supersession, restoring the `retracted` parent to `active` — it also
+  repairs rows written by ≤0.3.1, which retired the parent at write
+  time. An entry with a pending hold cannot be superseded again until it
+  resolves, so two quarantined forks never compete over one parent, and
+  `release` never revives a parent that isn't `active` (a
+  quarantined/proposed parent stays under its own review). The MCP
+  `quarantine` tool takes `hold_supersede`, forced off unless the server
+  runs with `DEVIN_MEMORY_MCP_PROMOTE=1` — restoring a row is
+  promotion-shaped, like `release`/`approve`/`auto_approve`.
+- **Tamper-evident provenance seal** — every write now stores
+  `provenance_hash`, a sha256 over a versioned canonical JSON of the
+  insert-frozen columns (content, `source_session_id`/`source_rowid`,
+  `created_at`, `machine_id`/`profile`/`workspace`, `conflicts_with`,
+  `version`/`supersedes_id`). `verify` recomputes it and reports
+  `seal_status`: `VERIFIED_SEALED` on a match, `TAMPER_SUSPECT` on any
+  post-hoc edit — a suspect seal fails the audit even when the
+  sessions.db half passes — and `UNSEALED` on rows predating the column
+  (additive migration; never silently upgraded). Lifecycle columns
+  (`status`, reasons, `tags`, `expires_at`) are unsealed so routine
+  transitions never read as tampering. `verify`'s `--sessions-db` is now
+  optional — the seal check is local; the MCP `verify` tool's
+  `sessions_db` parameter follows suit. Tamper-evident ≠ proof of
+  source truth: fabricated provenance seals cleanly, only the
+  sessions.db audit calls that out.
 - **CI** — repin the `pr-approve` gate caller to
   `Icaro0310/devin-powerups/.github/workflows/pr-approve.yml@v1.9`: the
   self-cancel fix (a successful approval no longer renders as a failed

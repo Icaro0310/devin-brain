@@ -11,6 +11,7 @@ entries, so a poisoned fact cannot leak back into an agent's context.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -34,6 +35,7 @@ from devin_memory.screen import (
 from devin_memory.store import (
     Entry,
     MemoryStore,
+    entry_provenance_hash,
     is_expired,
     parse_expires_at,
 )
@@ -248,18 +250,50 @@ def release(store: MemoryStore, entry_id: int) -> Entry:
 
     The quarantine reasons stay on the row — release is an audit event,
     not an erasure.
+
+    When the released entry is a supersession successor whose parent is
+    still ``active`` (a *held* supersession — see :func:`supersede` and
+    ``quarantine_entry(..., hold_supersede=True)``), the parent is
+    retired in the same transaction: releasing the replacement applies
+    the supersession it was holding. A parent already ``retracted``,
+    or itself under review, is left untouched — release never revives
+    or demotes a row that is not part of this hold.
     """
     entry = _require(store, entry_id)
     if entry.status != "quarantined":
         raise InvalidTransitionError(
             f"entry {entry_id} is {entry.status}, not quarantined"
         )
-    store.set_status(entry_id, "active")
+    with store.transaction():
+        store.set_status(entry_id, "active")
+        if entry.supersedes_id is not None:
+            parent = store.get(entry.supersedes_id)
+            if parent is not None and parent.status == "active":
+                store.set_status(parent.id, "retracted")
     return _require(store, entry_id)
 
 
+def _hold_superseded_parent(store: MemoryStore, entry: Entry) -> None:
+    """Restore the parent of a held supersession to ``active``.
+
+    Only a ``retracted`` parent is revived — the state the supersession
+    itself left it in. An ``active`` parent is already held open, and a
+    ``quarantined``/``proposed`` parent is under its own review — never
+    silently promoted out of it.
+    """
+    if entry.supersedes_id is None:
+        return
+    parent = store.get(entry.supersedes_id)
+    if parent is not None and parent.status == "retracted":
+        store.set_status(parent.id, "active")
+
+
 def quarantine_entry(
-    store: MemoryStore, entry_id: int, reason: str = "manual:user"
+    store: MemoryStore,
+    entry_id: int,
+    reason: str = "manual:user",
+    *,
+    hold_supersede: bool = False,
 ) -> Entry:
     """Mark an existing entry as ``quarantined`` (MM-3).
 
@@ -268,23 +302,40 @@ def quarantine_entry(
     lane. ``reason`` is appended to the row's reasons for audit (default
     ``manual:user``). Retracted entries cannot be quarantined — history
     stays history.
+
+    With ``hold_supersede=True`` the entry must be a supersession
+    successor (``supersedes_id`` set): quarantining it also *holds* the
+    supersession — the superseded parent returns to ``active`` while
+    the successor waits for review. ``release`` then completes the
+    supersession; ``retract`` rejects it and the parent stays live.
+    The quarantine and the parent's restoration commit in one
+    transaction. The flag also repairs ≤0.3.1 rows — successors written
+    before the hold fix retired their parent at write time.
     """
     entry = _require(store, entry_id)
-    if entry.status == "quarantined":
-        if reason and reason not in entry.quarantine_reasons:
-            store.set_quarantine_reasons(
-                entry_id, [*entry.quarantine_reasons, reason]
-            )
-        return _require(store, entry_id)
     if entry.status == "retracted":
         raise InvalidTransitionError(
             f"entry {entry_id} is retracted; cannot quarantine history"
         )
-    reasons = list(entry.quarantine_reasons)
-    if reason and reason not in reasons:
-        reasons.append(reason)
-    store.set_quarantine_reasons(entry_id, reasons)
-    store.set_status(entry_id, "quarantined")
+    if hold_supersede and entry.supersedes_id is None:
+        raise InvalidTransitionError(
+            f"entry {entry_id} supersedes nothing; --hold-supersede "
+            "applies to a supersession successor"
+        )
+    with store.transaction():
+        if entry.status == "quarantined":
+            if reason and reason not in entry.quarantine_reasons:
+                store.set_quarantine_reasons(
+                    entry_id, [*entry.quarantine_reasons, reason]
+                )
+        else:
+            reasons = list(entry.quarantine_reasons)
+            if reason and reason not in reasons:
+                reasons.append(reason)
+            store.set_quarantine_reasons(entry_id, reasons)
+            store.set_status(entry_id, "quarantined")
+        if hold_supersede:
+            _hold_superseded_parent(store, entry)
     return _require(store, entry_id)
 
 
@@ -297,6 +348,15 @@ def approve(store: MemoryStore, entry_id: int) -> Entry:
         )
     store.set_status(entry_id, "active")
     return _require(store, entry_id)
+
+
+def _pending_successor(store: MemoryStore, entry_id: int) -> Entry | None:
+    """The quarantined successor holding a supersession against
+    ``entry_id``, or ``None``."""
+    for entry in store.entries(status="quarantined"):
+        if entry.supersedes_id == entry_id:
+            return entry
+    return None
 
 
 def supersede(
@@ -312,15 +372,28 @@ def supersede(
 
     The old row becomes ``retracted`` and the new row links back via
     ``supersedes_id``/``version``. The new content is screened like any
-    other retain — if it quarantines, the old version is still retired
-    (the replacement waits in the queue for review). ``expires_at=None``
-    keeps the old row's expiry; pass a new ISO timestamp to change it.
+    other retain — if it quarantines, the supersession is *held*: the
+    old version stays ``active`` until the replacement is reviewed.
+    ``release`` then completes the supersession (old row retires);
+    ``retract`` on the quarantined successor rejects it (old row stays
+    live). ``expires_at=None`` keeps the old row's expiry; pass a new
+    ISO timestamp to change it.
+
+    An entry that already has a held supersession pending review cannot
+    be superseded again — resolve the pending successor first, so two
+    quarantined forks never compete over one parent.
     """
     old = _require(store, entry_id)
     if old.status != "active":
         raise InvalidTransitionError(
             f"entry {entry_id} is {old.status}; only active entries "
             "can be superseded"
+        )
+    pending = _pending_successor(store, entry_id)
+    if pending is not None:
+        raise InvalidTransitionError(
+            f"entry {entry_id} has a held supersession pending review "
+            f"(entry {pending.id}); release or retract it first"
         )
     if not isinstance(content, str) or not content.strip():
         raise ValueError("content must be a non-empty string")
@@ -335,6 +408,7 @@ def supersede(
         source_session_id=source_session_id or old.source_session_id,
         source_rowid=source_rowid if source_rowid is not None else old.source_rowid,
         expires_at=expires_at,
+        hold_old=result.status == "quarantined",
     )
 
 
@@ -348,25 +422,53 @@ def list_entries(
 
 
 def verify_provenance(
-    store: MemoryStore, entry_id: int, sessions_db: str | Path
+    store: MemoryStore, entry_id: int, sessions_db: str | Path | None = None
 ) -> dict[str, Any]:
-    """Check an entry's provenance against a real ``sessions.db``.
+    """Audit an entry's provenance — the write-time seal, plus an
+    optional ``sessions.db`` cross-check.
 
-    Uses devin-internals' read-only ``SessionsStore``: the recorded
-    ``source_session_id`` must exist as a session, and ``source_rowid``
-    (when recorded) must exist as a ``message_nodes.row_id`` in that
-    session — the "which session, when, evidence" audit.
+    Two independent checks:
+
+    - **seal** (always runs): when the row carries ``provenance_hash``
+      the sealed columns are re-hashed and compared — ``VERIFIED_SEALED``
+      when they agree, ``TAMPER_SUSPECT`` on any mismatch (a sealed
+      column was modified after the fact), ``UNSEALED`` on rows written
+      before seals existed. The seal is tamper-*evident*: it detects
+      post-hoc edits, it does not prove the recorded source was
+      truthful.
+    - **sessions.db audit** (only when a path is given): uses
+      devin-internals' read-only ``SessionsStore`` — the recorded
+      ``source_session_id`` must exist as a session, and
+      ``source_rowid`` (when recorded) must exist as a
+      ``message_nodes.row_id`` in that session. ``checked`` reports
+      whether this audit ran; it stays ``False`` when no db is given or
+      no provenance is recorded.
     """
     entry = _require(store, entry_id)
     report: dict[str, Any] = {
         "entry_id": entry.id,
-        "sessions_db": str(sessions_db),
+        "sessions_db": str(sessions_db) if sessions_db else None,
         "source_session_id": entry.source_session_id,
         "source_rowid": entry.source_rowid,
         "checked": False,
         "session_found": None,
         "rowid_found": None,
+        "provenance_hash": entry.provenance_hash,
+        "seal_status": None,
+        "recomputed_hash": None,
     }
+    if entry.provenance_hash is None:
+        report["seal_status"] = "UNSEALED"
+    else:
+        recomputed = entry_provenance_hash(entry)
+        report["recomputed_hash"] = recomputed
+        report["seal_status"] = (
+            "VERIFIED_SEALED"
+            if hmac.compare_digest(recomputed, entry.provenance_hash)
+            else "TAMPER_SUSPECT"
+        )
+    if sessions_db is None:
+        return report
     if not entry.source_session_id:
         report["reason"] = "no provenance recorded on this entry"
         return report

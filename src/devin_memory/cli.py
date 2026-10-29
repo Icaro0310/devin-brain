@@ -6,8 +6,8 @@ Subcommands:
   ``[--source-session ID] [--source-rowid N] [--expires-at ISO]``
 - ``recall "<query>" [--limit N] [--tags a,b] [--include-expired]``
   ``[--json]``
-- ``quarantine [<id>] [--reason r] [--list] [--release ID] [--digest]``
-  ``[--json]``
+- ``quarantine [<id>] [--reason r] [--hold-supersede] [--list]``
+  ``[--release ID] [--digest] [--json]``
 - ``conflicts [--json]`` — contradiction pairs linked at retain time
 - ``extract <session-id|--latest> --sessions-db DB [--auto-approve]``
 - ``approve <id>`` — promote a proposed extraction to active
@@ -20,7 +20,7 @@ Subcommands:
 - ``diff A.db B.db [--all] [--json]`` — read-only added/removed/changed
   between two stores, keyed by export id (exit 0 identical ·
   1 divergent · 2 unreadable db)
-- ``verify <id> --sessions-db <sessions.db>``
+- ``verify <id> [--sessions-db <sessions.db>]``
 
 The DB is ``./memory.db`` by default — override with the global ``--db``
 flag or the ``DEVIN_MEMORY_DB`` env var. This CLI only ever writes to its
@@ -146,10 +146,27 @@ def cmd_recall(args: argparse.Namespace) -> int:
 
 def cmd_quarantine(args: argparse.Namespace) -> int:
     if args.digest and (
-        args.id is not None or args.release is not None or args.reason
+        args.id is not None
+        or args.release is not None
+        or args.reason
+        or args.hold_supersede
     ):
         print(
-            "error: --digest is read-only; it takes no id/--release/--reason",
+            "error: --digest is read-only; it takes no"
+            " id/--release/--reason/--hold-supersede",
+            file=sys.stderr,
+        )
+        return 1
+    if args.hold_supersede and args.release is not None:
+        print(
+            "error: --hold-supersede applies when quarantining an entry,"
+            " not with --release",
+            file=sys.stderr,
+        )
+        return 1
+    if args.hold_supersede and args.id is None:
+        print(
+            "error: --hold-supersede needs an entry id to quarantine",
             file=sys.stderr,
         )
         return 1
@@ -179,7 +196,10 @@ def cmd_quarantine(args: argparse.Namespace) -> int:
             return 0
         if args.id is not None:
             entry = ops.quarantine_entry(
-                store, args.id, reason=args.reason or "manual:user"
+                store,
+                args.id,
+                reason=args.reason or "manual:user",
+                hold_supersede=args.hold_supersede,
             )
             if args.json:
                 _print_json(entry.to_dict())
@@ -271,11 +291,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
     with _open_store(args) as store:
         report = ops.verify_provenance(store, args.id, args.sessions_db)
     _print_json(report)
-    ok = (
-        report["checked"]
-        and report["session_found"]
-        and report["rowid_found"] is not False
-    )
+    # A tamper-suspect seal fails the audit even when the sessions.db
+    # half passes — a row edited after the fact never verifies clean.
+    ok = report["seal_status"] != "TAMPER_SUSPECT"
+    if args.sessions_db is not None:
+        ok = (
+            ok
+            and report["checked"]
+            and report["session_found"]
+            and report["rowid_found"] is not False
+        )
     return 0 if ok else 1
 
 
@@ -468,8 +493,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="quarantine reason stored for audit"
                         " (default: manual:user)")
     p.add_argument("--list", action="store_true", help="list (default action)")
+    p.add_argument("--hold-supersede", action="store_true",
+                   help="when quarantining a supersession successor, also"
+                        " hold the supersession: the superseded parent"
+                        " returns to active until release applies it or"
+                        " retract rejects it")
     p.add_argument("--release", type=int, metavar="ID",
-                   help="move a quarantined entry back to active")
+                   help="move a quarantined entry back to active"
+                        " (a held supersession then retires its parent)")
     p.add_argument("--digest", action="store_true",
                    help="print a deterministic audit digest of the lane"
                         " (read-only; no content)")
@@ -529,11 +560,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_diff)
 
     p = sub.add_parser(
-        "verify", help="audit an entry's provenance against a sessions.db"
+        "verify",
+        help="audit an entry's provenance — write-time seal plus an"
+             " optional sessions.db cross-check",
     )
     p.add_argument("id", type=int)
-    p.add_argument("--sessions-db", required=True, metavar="PATH",
-                   help="path to a Devin sessions.db")
+    p.add_argument("--sessions-db", metavar="PATH",
+                   help="path to a Devin sessions.db (optional — the"
+                        " provenance seal is checked locally either way)")
     p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser(
