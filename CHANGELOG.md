@@ -188,6 +188,9 @@
 - **CI** — `actions/setup-python` bumped from 7.0.0 to 7.1.0 in `ci.yml`
   (Dependabot).
 
+- **CI** — `pypa/gh-action-pypi-publish` bumped from 1.14.2 to 1.14.3 in
+  `pypi-publish.yml` (Dependabot).
+
 ## 0.3.0
 
 - **Fix** — `devin_memory.__version__` now reports the package version (was stale at `0.1.0` while `pyproject.toml` declared `0.3.0`); drives `devin-learning --version` and report metadata.
