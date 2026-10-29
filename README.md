@@ -140,8 +140,10 @@ devin-memory list --status proposed   # review queue
 devin-memory approve <id>             # proposed -> active
 
 # Context block for a UserPromptSubmit hook — active entries only,
-# filtered by workspace + machine profile, bounded by ~4 chars/token
+# filtered by workspace + machine profile, bounded by ~4 chars/token;
+# also appends a generated ecosystem-state block (see below)
 devin-memory prime [--workspace PATH] [--max-tokens N]
+                   [--state-md PATH] [--max-chars N]
 
 # Versioning and housekeeping
 devin-memory supersede <id> "corrected fact" [--expires-at <iso>]
@@ -333,7 +335,9 @@ rank first.
   block sized for a prompt hook. Entries scoped with `retain --workspace`
   only prime inside that workspace; entries written under a different
   machine profile never prime (the profile defaults to `corporate` —
-  fail-closed).
+  fail-closed). The block is followed by an `## ecosystem state` section
+  rendered from a generated `current-state.md` — see
+  [Ecosystem state injection](#ecosystem-state-injection).
 - **`compact`** deduplicates: non-retracted entries sharing exact
   `content` + `workspace` + `profile` collapse to one survivor — the
   liveliest status wins (`active` > `proposed` > `quarantined`), ties keep
@@ -354,6 +358,32 @@ rank first.
 The store is `./memory.db` by default — override with `--db` or
 `DEVIN_MEMORY_DB`. It is the only store this tool writes to; Devin's
 `sessions.db`, `acp-messages/*.db` and `state.vscdb` are only ever read.
+
+## Ecosystem state injection
+
+`prime` also appends a compact `## ecosystem state` block rendered from a
+generated `current-state.md` — the generated-timestamp line plus the
+**drift**, **service health** and **open PRs** sections, capped at
+`--max-chars` (default 2000) and ending in a `…(truncated)` marker when
+cut. File search order: `--state-md`, then `$DEVIN_ECOSYSTEM_STATE`, then
+`~/devin/devin-ecosystem/devin-powerups/reports/current-state.md`, then
+`./reports/current-state.md`. Missing or unreadable state prints only
+`state: unavailable (<reason>)` — the exit code stays 0, so hooks and
+scheduled writes never break on absent state.
+
+Two usage patterns:
+
+- **Push** — refresh a rules file the harness already injects, on a
+  schedule (cron / systemd timer / Task Scheduler), so every session gets
+  current state without remembering to pull:
+
+  ```bash
+  devin-memory prime > ~/.devin/rules/ecosystem-state-live.md
+  ```
+
+- **Pull-on-demand** — call `devin-memory prime` (or with `--state-md` /
+  `--max-chars`) inside a prompt or hook when fresh state matters more
+  than a cached copy.
 
 ## Works with Devin alone (Devin-only mode)
 

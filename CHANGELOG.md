@@ -76,6 +76,15 @@
 - **Docs** — README badge row gains the mcprush security badge
   (independent `A` grade listing), next to the other registry badges.
 
+- **`prime --state-md` / `--max-chars`** — `devin-memory prime` now appends
+  a compact `## ecosystem state` block rendered from a generated
+  `current-state.md` (timestamp, drift rows, service-health lines, open
+  PRs), capped at `--max-chars` (default 2000) with a `…(truncated)`
+  marker. Search order: `--state-md`, `$DEVIN_ECOSYSTEM_STATE`,
+  `~/devin/devin-ecosystem/devin-powerups/reports/current-state.md`,
+  `./reports/current-state.md`. Fail-open: missing/unreadable state prints
+  `state: unavailable (<reason>)` and the exit code stays 0, so the output
+  can be piped into rules files on a schedule or injected into hooks.
 - **`devin-learning weekly-report`** — new public surface of the learning
   loop: writes `weekly-YYYY-Www.md`, an aggregate-only summary (window
   dates, lesson counts by theme, promoted `learned-*` skill names,

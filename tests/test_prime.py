@@ -114,3 +114,121 @@ def test_cli_prime_end_to_end(tmp_path, capsys):
     )
     out = capsys.readouterr().out
     assert out.startswith("# devin-memory: recalled context")
+
+
+# ---------------------------------------------------------------------------
+# prime --state-md: generated ecosystem state injection (fail-open)
+# ---------------------------------------------------------------------------
+
+STATE_MD = """# Ecosystem state report
+
+_Generated 2026-10-28T12:00:00Z by devin-powerups_
+
+## Drift
+
+| repo | status | notes |
+| --- | --- | --- |
+| devin-brain | clean | - |
+| devin-state | ahead 2 | push pending |
+
+## Service health
+
+- devin-memory-mcp: ok
+- obsidian-mcp: down (connection refused)
+
+## Open PRs
+
+- Icaro0310/devin-brain#65 - feat: prime state block
+- Icaro0310/devin-state#71 - fix: reap stale locks
+"""
+
+
+def _write_state(tmp_path, text: str = STATE_MD):
+    state_file = tmp_path / "current-state.md"
+    state_file.write_text(text, encoding="utf-8")
+    return state_file
+
+
+def test_prime_state_happy_path(tmp_path):
+    state_file = _write_state(tmp_path)
+    text = ops.prime_state(state_md=state_file)
+    assert text.startswith("## ecosystem state")
+    assert "2026-10-28T12:00:00Z" in text  # generated timestamp
+    assert "| devin-brain | clean |" in text  # drift row
+    assert "obsidian-mcp: down" in text  # service health line
+    assert "devin-state#71" in text  # open PR
+    assert "…(truncated)" not in text
+
+
+def test_prime_state_missing_file_is_unavailable(tmp_path):
+    text = ops.prime_state(state_md=tmp_path / "nope.md")
+    assert text.startswith("state: unavailable")
+    assert "not found" in text
+
+
+def test_prime_state_unreadable_file_is_unavailable(tmp_path):
+    bad = tmp_path / "bad.md"
+    bad.write_bytes(b"\xff\xfe\x00\x01 not utf-8")
+    text = ops.prime_state(state_md=bad)
+    assert text.startswith("state: unavailable")
+
+
+def test_prime_state_env_var_search(tmp_path, monkeypatch):
+    state_file = _write_state(tmp_path)
+    monkeypatch.setenv("DEVIN_ECOSYSTEM_STATE", str(state_file))
+    text = ops.prime_state()  # no --state-md: env var is probed first
+    assert "ecosystem state" in text
+    assert "| devin-brain | clean |" in text
+
+
+def test_prime_state_nothing_found_is_unavailable(tmp_path, monkeypatch):
+    """No flag, no env, no default file -> one-line notice, never an error."""
+    monkeypatch.delenv("DEVIN_ECOSYSTEM_STATE", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))  # ~/devin/... resolves empty
+    monkeypatch.chdir(tmp_path)  # ./reports/... resolves empty
+    text = ops.prime_state()
+    assert text == "state: unavailable (no state file in search path)\n"
+
+
+def test_prime_state_max_chars_truncates(tmp_path):
+    rows = "\n".join(
+        f"- Icaro0310/repo-{i:03d}#{i} - pull request number {i}"
+        for i in range(60)
+    )
+    state_file = _write_state(
+        tmp_path, f"generated 2026-10-28\n\n## Open PRs\n\n{rows}\n"
+    )
+    text = ops.prime_state(state_md=state_file, max_chars=400)
+    assert len(text) <= 400
+    assert text.rstrip().endswith("…(truncated)")
+    assert "repo-059" not in text  # tail rows dropped
+
+
+def test_cli_prime_appends_state_block(tmp_path, capsys):
+    db = str(tmp_path / "memory.db")
+    state_file = _write_state(tmp_path)
+    main(["--db", db, "retain", CLEAN_FACT])
+    capsys.readouterr()
+    assert (
+        main(["--db", db, "prime", "--state-md", str(state_file)])
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert out.startswith("# devin-memory: recalled context")
+    assert CLEAN_FACT in out
+    assert "## ecosystem state" in out
+    assert "devin-state#71" in out
+
+
+def test_cli_prime_state_missing_still_exits_0(tmp_path, capsys):
+    db = str(tmp_path / "memory.db")
+    assert (
+        main(
+            ["--db", db, "prime",
+             "--state-md", str(tmp_path / "absent.md")]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert out.startswith("# devin-memory: recalled context")
+    assert "state: unavailable" in out

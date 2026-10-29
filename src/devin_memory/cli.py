@@ -11,7 +11,8 @@ Subcommands:
 - ``conflicts [--json]`` — contradiction pairs linked at retain time
 - ``extract <session-id|--latest> --sessions-db DB [--auto-approve]``
 - ``approve <id>`` — promote a proposed extraction to active
-- ``prime [--workspace PATH] [--max-tokens N]`` — hook context block
+- ``prime [--workspace PATH] [--max-tokens N] [--state-md PATH]
+  [--max-chars N]`` — hook context block + generated ecosystem state
 - ``retract <id>`` · ``supersede <id> "<content>" [--expires-at ISO]``
   · ``list [--since SPEC]``
 - ``compact [--apply] [--json]`` — dedup report first, mutate on --apply
@@ -330,7 +331,10 @@ def cmd_prime(args: argparse.Namespace) -> int:
             workspace=args.workspace,
             max_tokens=args.max_tokens,
         )
-    print(text, end="")
+    state = ops.prime_state(
+        state_md=args.state_md, max_chars=args.max_chars
+    )
+    print(text + "\n" + state, end="")
     return 0
 
 
@@ -534,7 +538,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "prime",
-        help="print a compact recalled-context block (UserPromptSubmit hook)",
+        help="print a compact recalled-context + ecosystem-state block"
+             " (UserPromptSubmit hook)",
     )
     p.add_argument("--workspace", metavar="PATH",
                    help="only prime global + this-workspace memories")
@@ -542,6 +547,18 @@ def build_parser() -> argparse.ArgumentParser:
                    default=ops.PRIME_DEFAULT_MAX_TOKENS, metavar="N",
                    help="size bound; ~4 chars/token estimate"
                         f" (default: {ops.PRIME_DEFAULT_MAX_TOKENS})")
+    p.add_argument(
+        "--state-md", metavar="PATH",
+        help="generated ecosystem state.md to append (default search:"
+             " $DEVIN_ECOSYSTEM_STATE, then"
+             " ~/devin/devin-ecosystem/devin-powerups/reports/"
+             "current-state.md, then ./reports/current-state.md;"
+             " missing/unreadable -> 'state: unavailable', rc stays 0)",
+    )
+    p.add_argument("--max-chars", type=int,
+                   default=ops.PRIME_STATE_DEFAULT_MAX_CHARS, metavar="N",
+                   help="cap on the ecosystem-state section in chars"
+                        f" (default: {ops.PRIME_STATE_DEFAULT_MAX_CHARS})")
     p.set_defaults(func=cmd_prime)
 
     return parser
