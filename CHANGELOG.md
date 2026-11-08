@@ -6,6 +6,9 @@
 
 ## Unreleased (F4)
 
+- **CI** — `pypi-publish.yml` verifier pin updated (Twine 6.1.0 →
+  7.0.0 + packaging pin via the reusable verify-wheel-version
+  workflow); publish gate unchanged (Dependabot PR #92).
 - **Held supersessions + `quarantine <id> --hold-supersede`** — fixes the
   documented caveat "quarantined supersessions still retire the old
   version". A `supersede` whose replacement screens into quarantine no
