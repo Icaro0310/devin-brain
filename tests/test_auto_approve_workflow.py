@@ -1,10 +1,11 @@
 """Static assertions for .github/workflows/auto-approve.yml.
 
 The caller is thin by design: triggers plus a pin to the reusable
-``pr-approve`` gate in devin-powerups. These tests pin the v1.12 caller
+``pr-approve`` gate in devin-powerups. These tests pin the v1.14 caller
 contract — the gate version, the ``pull_request_review_comment``
 trigger that re-evaluates the gate when a fix-commit reply lands, and
-the scoped job permissions — without running the workflow.
+the scoped job permissions (``contents: write`` is required by the
+v1.13+ auto-merge arm) — without running the workflow.
 """
 
 from pathlib import Path
@@ -27,11 +28,12 @@ def _load() -> dict:
     return wf
 
 
-def test_gate_pin_is_v1_12() -> None:
-    """v1.12 is the current gate (judge verdict + judge-status re-trigger);
-    the pin must be exact so a silent downgrade is caught here."""
+def test_gate_pin_is_v1_14() -> None:
+    """v1.14 is the current gate (v1.13 auto-merge arm on top of the
+    judge verdict + judge-status re-trigger); the pin must be exact so
+    a silent downgrade is caught here."""
     uses = _load()["jobs"]["approve"]["uses"]
-    assert uses == GATE_PIN + "v1.12"
+    assert uses == GATE_PIN + "v1.14"
 
 
 def test_review_comment_trigger_re_evaluates_gate() -> None:
@@ -40,5 +42,8 @@ def test_review_comment_trigger_re_evaluates_gate() -> None:
 
 
 def test_gate_permissions_stay_scoped() -> None:
+    """contents:write is required by the v1.13+ auto-merge arm
+    (`gh pr merge --auto`); its absence was the old safe state and is
+    now the regression this contract guards."""
     perms = _load()["jobs"]["approve"]["permissions"]
-    assert perms == {"contents": "read", "pull-requests": "write"}
+    assert perms == {"contents": "write", "pull-requests": "write"}

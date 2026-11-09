@@ -222,6 +222,12 @@
 
 - **CI** — `pypa/gh-action-pypi-publish` bumped from 1.14.2 to 1.14.3 in
   `pypi-publish.yml` (Dependabot).
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.14` and
+  granted `contents: write` at workflow and job level: since v1.13 the
+  gate arms `gh pr merge --auto` after approval, which needs write on
+  the caller job (the reusable workflow's grant is capped by the
+  caller); approved PRs now auto-merge once required checks pass
+  instead of waiting for a human merge click.
 
 ## 0.3.0
 
