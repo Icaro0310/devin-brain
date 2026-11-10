@@ -6,6 +6,12 @@
 
 ## Unreleased (F4)
 
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.16`:
+  the reusable now runs the auto-merge arm in a dedicated
+  `arm-auto-merge` job so the approve path holds read-only
+  permissions again; `contents: write` stays on the caller job for
+  the arm; `tests/test_auto_approve_workflow.py` pins the caller
+  contract.
 - **Held supersessions + `quarantine <id> --hold-supersede`** — fixes the
   documented caveat "quarantined supersessions still retire the old
   version". A `supersede` whose replacement screens into quarantine no
