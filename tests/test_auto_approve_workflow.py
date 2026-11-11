@@ -47,4 +47,8 @@ def test_gate_permissions_stay_scoped() -> None:
     inside the reusable (`gh pr merge --auto`); its absence was the
     old safe state and is now the regression this contract guards."""
     perms = _load()["jobs"]["approve"]["permissions"]
-    assert perms == {"contents": "write", "pull-requests": "write"}
+    assert perms == {
+        "contents": "write",
+        "pull-requests": "write",
+        "statuses": "read",
+    }
