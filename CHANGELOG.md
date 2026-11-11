@@ -12,6 +12,12 @@
   sessions.db and exceeded the 512M cron cgroup on multi-GB stores. The
   dependency floor moves to `devin-internals-spec>=0.3.2` — `iter_message_nodes`
   does not exist in 0.3.1.
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.16`:
+  the reusable now runs the auto-merge arm in a dedicated
+  `arm-auto-merge` job so the approve path holds read-only
+  permissions again; `contents: write` stays on the caller job for
+  the arm; `tests/test_auto_approve_workflow.py` pins the caller
+  contract.
 - **Held supersessions + `quarantine <id> --hold-supersede`** — fixes the
   documented caveat "quarantined supersessions still retire the old
   version". A `supersede` whose replacement screens into quarantine no
