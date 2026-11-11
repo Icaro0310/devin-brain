@@ -6,6 +6,12 @@
 
 ## Unreleased (F4)
 
+- **Streaming extraction (OOM fix)** — `extract_candidates` and
+  `scan_watermark` now iterate `SessionsStore.iter_message_nodes()` instead
+  of materializing `message_nodes()`, which list()-ified the whole
+  sessions.db and exceeded the 512M cron cgroup on multi-GB stores. The
+  dependency floor moves to `devin-internals-spec>=0.3.2` — `iter_message_nodes`
+  does not exist in 0.3.1.
 - **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.16`:
   the reusable now runs the auto-merge arm in a dedicated
   `arm-auto-merge` job so the approve path holds read-only
