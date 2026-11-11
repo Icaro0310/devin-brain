@@ -68,3 +68,16 @@ def test_scan_watermark_covers_non_candidates(sessions_db):
 
     wm = scan_watermark(sessions_db)
     assert wm >= max(c.created_at for c in extract_candidates(sessions_db))
+
+
+def test_extract_streams_message_nodes(sessions_db, monkeypatch):
+    """extract_candidates iterates message_nodes lazily — the materializing
+    SessionsStore.message_nodes() list()-ifies the whole table and OOMs the
+    512M cron cgroup on multi-GB stores (weekly-extract incident)."""
+    from devin_internals.parsers.sessions import SessionsStore
+
+    def _boom(self, session_id=None):
+        raise AssertionError("message_nodes() materializes the full table")
+
+    monkeypatch.setattr(SessionsStore, "message_nodes", _boom)
+    assert extract_candidates(sessions_db)
