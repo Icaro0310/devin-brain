@@ -12,6 +12,12 @@
   sessions.db and exceeded the 512M cron cgroup on multi-GB stores. The
   dependency floor moves to `devin-internals-spec>=0.3.2` — `iter_message_nodes`
   does not exist in 0.3.1.
+- **Tests** — `test_version_matches_package_distribution` now pins
+  `learning.__version__` against `pyproject.toml [project].version`
+  (the source of truth the built distribution reports) instead of
+  `importlib.metadata.version("devin-memory")`, which read ambient
+  install state — a stale editable install in a persistent venv
+  false-failed the e2e suite while code and metadata agreed at 0.3.2.
 - **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.16`:
   the reusable now runs the auto-merge arm in a dedicated
   `arm-auto-merge` job so the approve path holds read-only
