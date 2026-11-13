@@ -637,9 +637,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "ledger":
+        from devin_memory.ledger import cli as _ledger_cli
+        return _ledger_cli.main(args[1:])
+    args_ns = build_parser().parse_args(args)
     try:
-        return args.func(args)
+        return args_ns.func(args_ns)
     except (ops.MemoryOpsError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

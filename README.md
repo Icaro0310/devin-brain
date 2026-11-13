@@ -308,6 +308,30 @@ text, ids or paths, so the file is safe to commit. It resumes from the
 devin-learning weekly-report --sessions-db path/to/sessions.db --out ./docs/learning
 ```
 
+## Task ledger (`devin-memory ledger`)
+
+`devin-memory` also ships the **task ledger** — a persistent, append-only
+tracker of tasks and open loops so nothing is started and then forgotten.
+One active task at a time; every task ends `done` (with evidence),
+`parked` (with a next step), `blocked` or `dropped`. Migrated from the
+standalone `task-ledger` skill; store lives under XDG state
+(`~/.local/state/devin-memory/ledger`) and `devin-memory ledger migrate`
+imports a legacy `~/.devin/ledger` byte-for-byte.
+
+```bash
+devin-memory ledger init
+devin-memory ledger add "title" --accept "done when..."
+devin-memory ledger list · digest · check · doctor · stats
+devin-memory ledger hook <session-start|user-prompt|stop|session-end>
+```
+
+Lifecycle hooks inject the open-loops digest at session start, remind on
+active work per prompt, and block session close while tasks stay active
+(fail-open, max 3 blocks/session). Python consumers use
+`devin_memory.ledger.Ledger` + `integrations.audit/check/export_facts` —
+see [docs/ledger.md](docs/ledger.md). `devin-assure` and `devin-explore`
+consume it via their `ledger` optional extra.
+
 ## Memory states
 
 `active` · `proposed` (extracted, awaiting `approve`) · `quarantined`
