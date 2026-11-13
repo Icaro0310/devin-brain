@@ -25,6 +25,7 @@ import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -649,12 +650,19 @@ def git(repo, *args):
     return r.stdout if r.returncode == 0 else None
 
 
-def _under_tmp(p):
+def _under_tmp(p, raw=""):
+    """Volatile-temp evidence. ``raw`` is the literal token value: a
+    ``/tmp/...`` prefix marks ephemeral evidence even on platforms where it
+    is not absolute (Windows), and the resolved path is also compared
+    against the platform tempdir."""
+    if raw == "/tmp" or raw.startswith("/tmp/"):
+        return True
     try:
         r = str(p.resolve())
+        tmp = str(Path(tempfile.gettempdir()).resolve())
     except OSError:
         return False
-    return r == "/tmp" or r.startswith("/tmp/")
+    return r == tmp or r.startswith(tmp + os.sep)
 
 
 def cmd_audit(a, tasks):
@@ -685,7 +693,7 @@ def cmd_audit(a, tasks):
                 p = Path(val)
                 if not p.is_absolute():
                     p = repo / p
-                if _under_tmp(p):
+                if _under_tmp(p, val):
                     print(f"{t['id']} EPHEMERAL {tok}  (/tmp is volatile — existence not verified)")
                     continue
                 ok = p.exists()
