@@ -1,0 +1,6 @@
+{"op":"add","id":"DL-a1b2","title":"Fixture task one","accept":["done when tested"],"origin":"fixture","project":"","priority":"p2","after":[],"discovered_from":"","link":"","ts":"2026-01-01T00:00:00Z","session":"sess-fixture","agent":"test"}
+{"op":"start","id":"DL-a1b2","ts":"2026-01-01T00:01:00Z","session":"sess-fixture"}
+{"op":"done","id":"DL-a1b2","evidence":"commit:abc1234 file:tests/test_x.py","met":["done when tested"],"ts":"2026-01-01T00:02:00Z","session":"sess-fixture"}
+{"op":"add","id":"DL-c3d4","title":"Fixture task two","accept":["done when verified"],"origin":"","project":"","priority":"p2","after":[],"discovered_from":"","link":"","ts":"2026-01-01T00:03:00Z","session":"sess-fixture","agent":"test"}
+{"op":"park","id":"DL-c3d4","next":"resume at step 2","note":"","ts":"2026-01-01T00:04:00Z","session":"sess-fixture"}
+{"op":"annotate","id":"DL-c3d4","note":"fixture annotation","ts":"2026-01-01T00:05:00Z","session":"sess-fixture"}

@@ -1,0 +1,2 @@
+{"ts":"2026-01-01T00:00:30Z","session_id":"sess-fixture","event":"start","source":"resume"}
+{"ts":"2026-01-01T00:05:30Z","session_id":"sess-fixture","event":"end","reason":"other"}
