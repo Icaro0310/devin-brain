@@ -4,15 +4,15 @@ Precedence: ``$DEVIN_LEDGER_DIR`` (tests/hooks override) >
 ``$XDG_STATE_HOME/devin-memory/ledger`` > ``~/.local/state/devin-memory/ledger``.
 
 The legacy location ``~/.devin/ledger`` is imported once by
-``devin-memory ledger migrate``; nothing here reads it implicitly.
+``devin-memory ledger migrate --from-dir``; nothing here reads it
+implicitly. (No module-level ``Path.home()`` — it raises when HOME is
+unset, e.g. stripped-env CI subprocesses.)
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-
-LEGACY_DIR = Path.home() / ".devin" / "ledger"
 
 
 def ledger_dir() -> Path:
