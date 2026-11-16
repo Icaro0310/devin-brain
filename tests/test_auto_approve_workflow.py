@@ -1,11 +1,11 @@
 """Static assertions for .github/workflows/auto-approve.yml.
 
 The caller is thin by design: triggers plus a pin to the reusable
-``pr-approve`` gate in devin-powerups. These tests pin the v1.16 caller
+``pr-approve`` gate in devin-powerups. These tests pin the v1.17 caller
 contract — the gate version, the ``pull_request_review_comment``
 trigger that re-evaluates the gate when a fix-commit reply lands, and
 the scoped job permissions (``contents: write`` is still required by
-the v1.16 ``arm-auto-merge`` job inside the reusable) — without running
+the v1.17 ``arm-auto-merge`` job inside the reusable) — without running
 the workflow.
 """
 
@@ -29,12 +29,12 @@ def _load() -> dict:
     return wf
 
 
-def test_gate_pin_is_v1_16() -> None:
-    """v1.16 splits the auto-merge arm into a dedicated job so the
+def test_gate_pin_is_v1_17() -> None:
+    """v1.17 splits the auto-merge arm into a dedicated job so the
     approve path runs read-only again; the pin must be exact so a
     silent downgrade is caught here."""
     uses = _load()["jobs"]["approve"]["uses"]
-    assert uses == GATE_PIN + "v1.16"
+    assert uses == GATE_PIN + "v1.17"
 
 
 def test_review_comment_trigger_re_evaluates_gate() -> None:
@@ -43,7 +43,7 @@ def test_review_comment_trigger_re_evaluates_gate() -> None:
 
 
 def test_gate_permissions_stay_scoped() -> None:
-    """contents:write is required by the v1.16 ``arm-auto-merge`` job
+    """contents:write is required by the v1.17 ``arm-auto-merge`` job
     inside the reusable (`gh pr merge --auto`); its absence was the
     old safe state and is now the regression this contract guards."""
     perms = _load()["jobs"]["approve"]["permissions"]
@@ -52,3 +52,35 @@ def test_gate_permissions_stay_scoped() -> None:
         "pull-requests": "write",
         "statuses": "read",
     }
+
+BOOTSTRAP = WORKFLOW.parent / "bootstrap-approve-100.yml"
+
+
+def _load_bootstrap() -> dict:
+    wf = yaml.safe_load(BOOTSTRAP.read_text(encoding="utf-8"))
+    wf["on"] = wf.pop(True)
+    return wf
+
+
+def test_bootstrap_scoped_to_pr100() -> None:
+    """A comment containing `bootstrap-approve` only fires on the open
+    PR 100 — the pin guards the one-shot scope."""
+    cond = _load_bootstrap()["jobs"]["approve"]["if"]
+    assert "number == 100" in cond and "state == 'open'" in cond
+
+
+def test_bootstrap_requires_authorized_commenter() -> None:
+    """Without an author_association check any commenter could trigger
+    the approval — the guard must stay in the condition."""
+    cond = _load_bootstrap()["jobs"]["approve"]["if"]
+    assert "author_association" in cond
+    assert "OWNER" in cond and "COLLABORATOR" in cond
+
+
+def test_bootstrap_trigger_permissions_and_command() -> None:
+    wf = _load_bootstrap()
+    assert "pull_request_review_comment" in wf["on"]
+    assert wf["permissions"] == {"pull-requests": "write",
+                               "statuses": "read"}
+    run = wf["jobs"]["approve"]["steps"][0]["run"]
+    assert "gh pr review 100" in run and "--approve" in run
