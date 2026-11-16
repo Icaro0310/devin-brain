@@ -6,6 +6,10 @@
 
 ## Unreleased (F4)
 
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.17`
+  (was v1.16); `bootstrap-approve-100.yml` gated to authorized
+  commenters; `tests/test_auto_approve_workflow.py` now covers the
+  bootstrap workflow contract.
 - **Streaming extraction (OOM fix)** — `extract_candidates` and
   `scan_watermark` now iterate `SessionsStore.iter_message_nodes()` instead
   of materializing `message_nodes()`, which list()-ified the whole
