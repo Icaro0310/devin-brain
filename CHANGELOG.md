@@ -9,6 +9,28 @@
 - **CI** — `pypi-publish.yml` verifier pin updated (Twine 6.1.0 →
   7.0.0 + packaging pin via the reusable verify-wheel-version
   workflow); publish gate unchanged (Dependabot PR #92).
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.17`
+  (was v1.16); `bootstrap-approve-100.yml` gated to authorized
+  commenters; `tests/test_auto_approve_workflow.py` now covers the
+  bootstrap workflow contract.
+- **Streaming extraction (OOM fix)** — `extract_candidates` and
+  `scan_watermark` now iterate `SessionsStore.iter_message_nodes()` instead
+  of materializing `message_nodes()`, which list()-ified the whole
+  sessions.db and exceeded the 512M cron cgroup on multi-GB stores. The
+  dependency floor moves to `devin-internals-spec>=0.3.2` — `iter_message_nodes`
+  does not exist in 0.3.1.
+- **Tests** — `test_version_matches_package_distribution` now pins
+  `learning.__version__` against `pyproject.toml [project].version`
+  (the source of truth the built distribution reports) instead of
+  `importlib.metadata.version("devin-memory")`, which read ambient
+  install state — a stale editable install in a persistent venv
+  false-failed the e2e suite while code and metadata agreed at 0.3.2.
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.16`:
+  the reusable now runs the auto-merge arm in a dedicated
+  `arm-auto-merge` job so the approve path holds read-only
+  permissions again; `contents: write` stays on the caller job for
+  the arm; `tests/test_auto_approve_workflow.py` pins the caller
+  contract.
 - **Held supersessions + `quarantine <id> --hold-supersede`** — fixes the
   documented caveat "quarantined supersessions still retire the old
   version". A `supersede` whose replacement screens into quarantine no
@@ -225,6 +247,12 @@
 
 - **CI** — `pypa/gh-action-pypi-publish` bumped from 1.14.2 to 1.14.3 in
   `pypi-publish.yml` (Dependabot).
+- **CI** — `auto-approve` caller repinned to `pr-approve` `@v1.14` and
+  granted `contents: write` at workflow and job level: since v1.13 the
+  gate arms `gh pr merge --auto` after approval, which needs write on
+  the caller job (the reusable workflow's grant is capped by the
+  caller); approved PRs now auto-merge once required checks pass
+  instead of waiting for a human merge click.
 
 ## 0.3.0
 

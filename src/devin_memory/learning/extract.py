@@ -83,7 +83,9 @@ def extract_candidates(
     """
     candidates: list[Candidate] = []
     with SessionsStore(db_path) as store:
-        for node in store.message_nodes():
+        # Stream, don't materialize: message_nodes() list()-ifies the whole
+        # table and OOMs the 512M cron cgroup on multi-GB stores.
+        for node in store.iter_message_nodes():
             if since and int(node.created_at or 0) <= since:
                 continue
             payload = _message_payload(node.chat_message)
@@ -108,6 +110,6 @@ def scan_watermark(db_path: str | Path) -> int:
     non-matching nodes too, otherwise they would rescan every run."""
     with SessionsStore(db_path) as store:
         return max(
-            (int(n.created_at or 0) for n in store.message_nodes()),
+            (int(n.created_at or 0) for n in store.iter_message_nodes()),
             default=0,
         )
