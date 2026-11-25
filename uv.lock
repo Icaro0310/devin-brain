@@ -241,16 +241,16 @@ wheels = [
 
 [[package]]
 name = "devin-internals-spec"
-version = "0.3.3"
+version = "0.3.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ff/b8/2d69d4e53acd668de4225fc014c0122b6444f5d20b08c47e9e0d95a8adde/devin_internals_spec-0.3.3.tar.gz", hash = "sha256:372f0d772376d45c203932ad4da0ab21b7c3827b1decc69b43e648b5e835791a", size = 167524, upload-time = "2026-10-28T12:56:45.696Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/93/e0efb019fbf13f80a6406a6603d747641c5bab9653778242adf57ea0c501/devin_internals_spec-0.3.4.tar.gz", hash = "sha256:c1410e2264f1b10a00466782d131236e71b180acc1d9269a1068fe9d9f945d71", size = 179294, upload-time = "2026-11-11T10:50:46.576Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/f4/d8033d937cfc293d42decd2c44de104277e10610fc6a2bfc70b424aedadc/devin_internals_spec-0.3.3-py3-none-any.whl", hash = "sha256:150aeb3104923bd24c0b874593b61539a42324d901b4854a981659723a15cffd", size = 159063, upload-time = "2026-10-28T12:56:44.392Z" },
+    { url = "https://files.pythonhosted.org/packages/50/1c/9120e6f2d9af6236d0f2797c1ddecc566cae65323dbf16dea93a78a10f5a/devin_internals_spec-0.3.4-py3-none-any.whl", hash = "sha256:211b3ffff7ea28e4b3de987046af511a26768aa369f7a6453fbbdb9840fffa3c", size = 168388, upload-time = "2026-11-11T10:50:45.012Z" },
 ]
 
 [[package]]
 name = "devin-memory"
-version = "0.3.2"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "devin-internals-spec" },
